@@ -40,8 +40,9 @@
             margin-bottom: 32px;
         }
         
-        .logo-icon {
-            font-size: 64px;
+        .logo img {
+            max-width: 280px;
+            height: auto;
             margin-bottom: 16px;
         }
         
@@ -144,7 +145,7 @@
 <body>
     <div class="login-box">
         <div class="logo">
-            <div class="logo-icon">🚌</div>
+            <img src="logo_ballanfat.png" alt="Autocars Ballanfat">
             <h1>Grille Tarifaire</h1>
             <p class="subtitle">Autocars Ballanfat</p>
         </div>
@@ -158,6 +159,7 @@
                     required 
                     autocomplete="email"
                     placeholder="votre@email.fr"
+                    value="a.ballanfat@gmail.com"
                 >
             </div>
             
@@ -196,9 +198,19 @@
         
         // Vérifier si déjà connecté
         (async function checkAuth() {
-            const isAuth = await Auth.isAuthenticated();
-            if (isAuth) {
-                window.location.href = 'grille_v11_11_SUPABASE.html';
+            try {
+                if (typeof Auth === 'undefined') {
+                    console.log('⏳ Attente chargement Auth...');
+                    // Attendre que supabase-config.js se charge
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                }
+                
+                const isAuth = await Auth.isAuthenticated();
+                if (isAuth) {
+                    window.location.href = 'grille_v11_11_SUPABASE.html';
+                }
+            } catch (error) {
+                console.error('Erreur vérification auth:', error);
             }
         })();
         
@@ -215,6 +227,11 @@
             loadingDiv.classList.add('show');
             
             try {
+                // Vérifier que Auth est chargé
+                if (typeof Auth === 'undefined') {
+                    throw new Error('Erreur de chargement. Rechargez la page.');
+                }
+                
                 await Auth.login(email, password);
                 
                 // Succès - redirection
