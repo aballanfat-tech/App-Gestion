@@ -1,42 +1,44 @@
 // ========================================
-// CONFIGURATION SUPABASE V2
+// CONFIGURATION SUPABASE V3 - SIMPLIFIÉE
 // Grille Tarifaire Autocars Ballanfat
-// NOUVEAU PROJET - Compatible GitHub Pages
+// Version sans accès aux tables pendant login
 // ========================================
 
 (function() {
   'use strict';
 
-  // Configuration - NOUVELLES CLÉS
   const SUPABASE_CONFIG = {
     url: 'https://kcmofhnbwcryrtwhjrtf.supabase.co',
     key: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtjbW9maG5id2NyeXJ0d2hqcnRmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjYzNDQ1NjgsImV4cCI6MjA4MTkyMDU2OH0.zPeT3HRSfoHeCjH7tqK12yDLN1u69apXz1ARIZfnBFI'
   };
 
-  // Attendre que la bibliothèque Supabase soit chargée
   function initSupabase() {
     if (typeof window.supabase === 'undefined' || !window.supabase.createClient) {
-      console.error('❌ Bibliothèque Supabase non chargée');
+      console.error('❌ Supabase non chargé');
       return;
     }
 
-    // Initialisation client Supabase
     const supabaseClient = window.supabase.createClient(SUPABASE_CONFIG.url, SUPABASE_CONFIG.key);
 
-    // ========================================
-    // AUTHENTIFICATION
-    // ========================================
-
+    // AUTHENTIFICATION ULTRA-SIMPLE
     class Auth {
       static async login(email, password) {
         try {
+          console.log('Tentative de connexion pour:', email);
+          
           const { data, error } = await supabaseClient.auth.signInWithPassword({
-            email,
-            password
+            email: email,
+            password: password
           });
           
-          if (error) throw error;
+          if (error) {
+            console.error('Erreur Supabase Auth:', error);
+            throw error;
+          }
+          
+          console.log('Connexion réussie:', data.user);
           return data.user;
+          
         } catch (error) {
           console.error('Erreur login:', error);
           throw error;
@@ -45,12 +47,10 @@
 
       static async logout() {
         try {
-          const { error } = await supabaseClient.auth.signOut();
-          if (error) throw error;
+          await supabaseClient.auth.signOut();
           window.location.href = 'login.html';
         } catch (error) {
           console.error('Erreur logout:', error);
-          throw error;
         }
       }
 
@@ -59,7 +59,6 @@
           const { data: { user } } = await supabaseClient.auth.getUser();
           return user;
         } catch (error) {
-          console.error('Erreur getCurrentUser:', error);
           return null;
         }
       }
@@ -79,10 +78,7 @@
       }
     }
 
-    // ========================================
-    // GESTION CLIENTS
-    // ========================================
-
+    // CLIENTS API SIMPLIFIÉ
     class ClientsAPI {
       static async getAll() {
         try {
@@ -94,7 +90,7 @@
           if (error) throw error;
           return data || [];
         } catch (error) {
-          console.error('Erreur getAll clients:', error);
+          console.error('Erreur clients:', error);
           return [];
         }
       }
@@ -110,21 +106,15 @@
           if (error) throw error;
           return data;
         } catch (error) {
-          console.error('Erreur getByName:', error);
           return null;
         }
       }
 
       static async create(name) {
         try {
-          const user = await Auth.getCurrentUser();
-          
           const { data, error } = await supabaseClient
             .from('clients')
-            .insert({
-              name: name,
-              created_by: user?.id
-            })
+            .insert({ name: name })
             .select()
             .single();
           
@@ -137,18 +127,12 @@
       }
     }
 
-    // ========================================
-    // GESTION GRILLES TARIFAIRES
-    // ========================================
-
+    // GRILLES API SIMPLIFIÉ
     class GrillesAPI {
       static async getOne(clientName, year) {
         try {
           const client = await ClientsAPI.getByName(clientName);
-          if (!client) {
-            console.log(`Client ${clientName} non trouvé`);
-            return null;
-          }
+          if (!client) return null;
 
           const { data, error } = await supabaseClient
             .from('grilles')
@@ -157,12 +141,8 @@
             .eq('year', year)
             .single();
           
-          if (error) {
-            if (error.code === 'PGRST116') {
-              return null;
-            }
-            throw error;
-          }
+          if (error && error.code === 'PGRST116') return null;
+          if (error) throw error;
           
           return data;
         } catch (error) {
@@ -173,10 +153,7 @@
 
       static async create(clientName, year, data, tva = 10.0) {
         try {
-          const user = await Auth.getCurrentUser();
-          
           let client = await ClientsAPI.getByName(clientName);
-          
           if (!client) {
             client = await ClientsAPI.create(clientName);
           }
@@ -187,9 +164,7 @@
               client_id: client.id,
               year: year,
               data: data,
-              tva: tva,
-              created_by: user?.id,
-              updated_by: user?.id
+              tva: tva
             })
             .select()
             .single();
@@ -197,26 +172,21 @@
           if (error) throw error;
           return result;
         } catch (error) {
-          console.error('Erreur create grille:', error);
+          console.error('Erreur create:', error);
           throw error;
         }
       }
 
       static async update(clientName, year, data, tva) {
         try {
-          const user = await Auth.getCurrentUser();
-          
           const client = await ClientsAPI.getByName(clientName);
-          if (!client) {
-            throw new Error(`Client ${clientName} non trouvé`);
-          }
+          if (!client) throw new Error('Client non trouvé');
 
           const { data: result, error } = await supabaseClient
             .from('grilles')
             .update({
               data: data,
               tva: tva,
-              updated_by: user?.id,
               updated_at: new Date().toISOString()
             })
             .eq('client_id', client.id)
@@ -227,7 +197,7 @@
           if (error) throw error;
           return result;
         } catch (error) {
-          console.error('Erreur update grille:', error);
+          console.error('Erreur update:', error);
           throw error;
         }
       }
@@ -242,7 +212,7 @@
             return await this.create(clientName, year, data, tva);
           }
         } catch (error) {
-          console.error('Erreur save grille:', error);
+          console.error('Erreur save:', error);
           throw error;
         }
       }
@@ -250,10 +220,7 @@
       static async duplicate(clientName, fromYear, toYear) {
         try {
           const source = await this.getOne(clientName, fromYear);
-          if (!source) {
-            throw new Error(`Grille ${clientName} ${fromYear} non trouvée`);
-          }
-
+          if (!source) throw new Error('Grille source non trouvée');
           return await this.create(clientName, toYear, source.data, source.tva);
         } catch (error) {
           console.error('Erreur duplicate:', error);
@@ -275,7 +242,6 @@
           if (error) throw error;
           return data || [];
         } catch (error) {
-          console.error('Erreur getAllForClient:', error);
           return [];
         }
       }
@@ -285,33 +251,25 @@
           const client = await ClientsAPI.getByName(clientName);
           if (!client) return;
 
-          const { error } = await supabaseClient
+          await supabaseClient
             .from('grilles')
             .delete()
             .eq('client_id', client.id)
             .eq('year', year);
-          
-          if (error) throw error;
         } catch (error) {
           console.error('Erreur delete:', error);
-          throw error;
         }
       }
     }
-
-    // ========================================
-    // EXPORT GLOBAL
-    // ========================================
 
     window.Auth = Auth;
     window.ClientsAPI = ClientsAPI;
     window.GrillesAPI = GrillesAPI;
     window.SupabaseClient = supabaseClient;
 
-    console.log('✅ Supabase API V2 chargée - Nouveau projet');
+    console.log('✅ Supabase V3 Simple chargé');
   }
 
-  // Initialiser dès que possible
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initSupabase);
   } else {
