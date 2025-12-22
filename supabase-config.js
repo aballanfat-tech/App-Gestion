@@ -1,16 +1,16 @@
 // ========================================
-// CONFIGURATION SUPABASE
+// CONFIGURATION SUPABASE V2
 // Grille Tarifaire Autocars Ballanfat
-// Version 2.0 - Compatible GitHub Pages
+// NOUVEAU PROJET - Compatible GitHub Pages
 // ========================================
 
 (function() {
   'use strict';
 
-  // Configuration - VOS IDENTIFIANTS
+  // Configuration - NOUVELLES CLÉS
   const SUPABASE_CONFIG = {
-    url: 'https://bgkpjrjnbhhozalmiogg.supabase.co',
-    key: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJna3BqcmpuYmhob3phbG1pb2dnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjYwNDEzMzAsImV4cCI6MjA4MTYxNzMzMH0.Oy3TESDOSt-bt4wTem-HYsjgnufqGT-ziYTfZKy24e8'
+    url: 'https://kcmofhnbwcryrtwhjrtf.supabase.co',
+    key: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtjbW9maG5id2NyeXJ0d2hqcnRmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjYzNDQ1NjgsImV4cCI6MjA4MTkyMDU2OH0.zPeT3HRSfoHeCjH7tqK12yDLN1u69apXz1ARIZfnBFI'
   };
 
   // Attendre que la bibliothèque Supabase soit chargée
@@ -28,7 +28,6 @@
     // ========================================
 
     class Auth {
-      // Connexion
       static async login(email, password) {
         try {
           const { data, error } = await supabaseClient.auth.signInWithPassword({
@@ -44,7 +43,6 @@
         }
       }
 
-      // Déconnexion
       static async logout() {
         try {
           const { error } = await supabaseClient.auth.signOut();
@@ -56,7 +54,6 @@
         }
       }
 
-      // Utilisateur connecté
       static async getCurrentUser() {
         try {
           const { data: { user } } = await supabaseClient.auth.getUser();
@@ -67,13 +64,11 @@
         }
       }
 
-      // Vérifier si connecté
       static async isAuthenticated() {
         const user = await this.getCurrentUser();
         return user !== null;
       }
 
-      // Rediriger vers login si non authentifié
       static async requireAuth() {
         const isAuth = await this.isAuthenticated();
         if (!isAuth) {
@@ -89,7 +84,6 @@
     // ========================================
 
     class ClientsAPI {
-      // Liste tous les clients
       static async getAll() {
         try {
           const { data, error } = await supabaseClient
@@ -105,7 +99,6 @@
         }
       }
 
-      // Récupérer un client par nom
       static async getByName(name) {
         try {
           const { data, error } = await supabaseClient
@@ -122,7 +115,6 @@
         }
       }
 
-      // Créer un client
       static async create(name) {
         try {
           const user = await Auth.getCurrentUser();
@@ -150,7 +142,6 @@
     // ========================================
 
     class GrillesAPI {
-      // Récupérer une grille spécifique (client + année)
       static async getOne(clientName, year) {
         try {
           const client = await ClientsAPI.getByName(clientName);
@@ -180,7 +171,6 @@
         }
       }
 
-      // Créer une nouvelle grille
       static async create(clientName, year, data, tva = 10.0) {
         try {
           const user = await Auth.getCurrentUser();
@@ -212,7 +202,6 @@
         }
       }
 
-      // Mettre à jour une grille existante
       static async update(clientName, year, data, tva) {
         try {
           const user = await Auth.getCurrentUser();
@@ -243,7 +232,6 @@
         }
       }
 
-      // Sauvegarder (créer ou mettre à jour)
       static async save(clientName, year, data, tva) {
         try {
           const existing = await this.getOne(clientName, year);
@@ -259,7 +247,6 @@
         }
       }
 
-      // Dupliquer une grille
       static async duplicate(clientName, fromYear, toYear) {
         try {
           const source = await this.getOne(clientName, fromYear);
@@ -274,7 +261,6 @@
         }
       }
 
-      // Lister toutes les grilles d'un client
       static async getAllForClient(clientName) {
         try {
           const client = await ClientsAPI.getByName(clientName);
@@ -294,7 +280,6 @@
         }
       }
 
-      // Supprimer une grille
       static async delete(clientName, year) {
         try {
           const client = await ClientsAPI.getByName(clientName);
@@ -323,7 +308,7 @@
     window.GrillesAPI = GrillesAPI;
     window.SupabaseClient = supabaseClient;
 
-    console.log('✅ Supabase API chargée - Version 2.0');
+    console.log('✅ Supabase API V2 chargée - Nouveau projet');
   }
 
   // Initialiser dès que possible
