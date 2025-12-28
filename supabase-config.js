@@ -1,15 +1,15 @@
 // ========================================
-// CONFIGURATION SUPABASE V3 - SIMPLIFIÉE
+// CONFIGURATION SUPABASE V4
 // Grille Tarifaire Autocars Ballanfat
-// Version sans accès aux tables pendant login
+// PROJET FONCTIONNEL - Authentification validée
 // ========================================
 
 (function() {
   'use strict';
 
   const SUPABASE_CONFIG = {
-    url: 'https://kcmofhnbwcryrtwhjrtf.supabase.co',
-    key: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtjbW9maG5id2NyeXJ0d2hqcnRmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjYzNDQ1NjgsImV4cCI6MjA4MTkyMDU2OH0.zPeT3HRSfoHeCjH7tqK12yDLN1u69apXz1ARIZfnBFI'
+    url: 'https://ayzouplmnnlooofcxbsz.supabase.co',
+    key: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF5em91cGxtbm5sb29vZmN4YnN6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjY5MzE2OTAsImV4cCI6MjA4MjUwNzY5MH0.RUs4_g2k0c0n62fEZQAKdG4FtfoqFcFULxrZESopZ4k'
   };
 
   function initSupabase() {
@@ -20,11 +20,14 @@
 
     const supabaseClient = window.supabase.createClient(SUPABASE_CONFIG.url, SUPABASE_CONFIG.key);
 
-    // AUTHENTIFICATION ULTRA-SIMPLE
+    // ========================================
+    // AUTHENTIFICATION
+    // ========================================
+
     class Auth {
       static async login(email, password) {
         try {
-          console.log('Tentative de connexion pour:', email);
+          console.log('Connexion pour:', email);
           
           const { data, error } = await supabaseClient.auth.signInWithPassword({
             email: email,
@@ -32,11 +35,11 @@
           });
           
           if (error) {
-            console.error('Erreur Supabase Auth:', error);
+            console.error('Erreur login:', error);
             throw error;
           }
           
-          console.log('Connexion réussie:', data.user);
+          console.log('✅ Connexion réussie');
           return data.user;
           
         } catch (error) {
@@ -78,7 +81,10 @@
       }
     }
 
-    // CLIENTS API SIMPLIFIÉ
+    // ========================================
+    // CLIENTS
+    // ========================================
+
     class ClientsAPI {
       static async getAll() {
         try {
@@ -90,7 +96,7 @@
           if (error) throw error;
           return data || [];
         } catch (error) {
-          console.error('Erreur clients:', error);
+          console.error('Erreur getAll clients:', error);
           return [];
         }
       }
@@ -106,6 +112,7 @@
           if (error) throw error;
           return data;
         } catch (error) {
+          console.error('Erreur getByName:', error);
           return null;
         }
       }
@@ -127,7 +134,10 @@
       }
     }
 
-    // GRILLES API SIMPLIFIÉ
+    // ========================================
+    // GRILLES TARIFAIRES
+    // ========================================
+
     class GrillesAPI {
       static async getOne(clientName, year) {
         try {
@@ -267,7 +277,7 @@
     window.GrillesAPI = GrillesAPI;
     window.SupabaseClient = supabaseClient;
 
-    console.log('✅ Supabase V3 Simple chargé');
+    console.log('✅ Supabase V4 chargé - Authentification validée');
   }
 
   if (document.readyState === 'loading') {
