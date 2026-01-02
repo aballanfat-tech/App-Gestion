@@ -1,0 +1,1148 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Grille Tarifaire v11.0.14 FINALE - Autocars Ballanfat</title>
+    
+    <!-- Supabase -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #1a3c6e;
+            --accent: #428bca;
+            --bg-light: #f8f9fa;
+            --border: #dee2e6;
+            --text-dark: #212529;
+            --success: #5cb85c;
+            --danger: #d9534f;
+            --warning: #f0ad4e;
+            --duplicate: #fff3cd;
+        }
+
+        body {
+            font-family: Georgia, 'Times New Roman', serif;
+            background-color: var(--bg-light);
+            color: var(--text-dark);
+            line-height: 1.6;
+            position: relative;
+            min-height: 100vh;
+        }
+
+        /* Logo en watermark */
+        body::before {
+            content: "";
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 800px;
+            height: 800px;
+            background-image: url('logo_ballanfat.png');
+            background-size: contain;
+            background-repeat: no-repeat;
+            background-position: center;
+            opacity: 0.04;
+            z-index: 0;
+            pointer-events: none;
+        }
+
+        .container {
+            max-width: 100%;
+            margin: 0 auto;
+            padding: 20px;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* HEADER RÉALIGNÉ - 3 ZONES */
+        header {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
+            color: white;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+            border-radius: 8px;
+        }
+
+        .header-container {
+            display: grid;
+            grid-template-columns: 200px 1fr 400px;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+        }
+
+        .logo-header {
+            height: 60px;
+            width: auto;
+        }
+
+        .header-center {
+            text-align: center;
+        }
+
+        .header-center h1 {
+            font-size: 2em;
+            margin-bottom: 5px;
+            font-weight: 600;
+        }
+
+        .header-center .subtitle {
+            font-size: 0.9em;
+            opacity: 0.9;
+        }
+
+        .header-right {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+            align-items: center;
+        }
+
+        /* Sélecteurs */
+        .selectors {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        label {
+            font-weight: 600;
+            color: var(--primary);
+            font-size: 0.9em;
+        }
+
+        select, input {
+            padding: 10px;
+            border: 2px solid var(--border);
+            border-radius: 6px;
+            font-size: 1em;
+            font-family: Georgia, serif;
+            transition: border-color 0.3s;
+        }
+
+        select:focus, input:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        /* Boutons */
+        button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            font-size: 1em;
+            font-family: Georgia, serif;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: 600;
+        }
+
+        .btn-primary {
+            background-color: var(--accent);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background-color: var(--primary);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+
+        .btn-success {
+            background-color: var(--success);
+            color: white;
+        }
+
+        .btn-danger {
+            background-color: var(--danger);
+            color: white;
+        }
+
+        .btn-warning {
+            background-color: var(--warning);
+            color: white;
+        }
+
+        /* Actions */
+        .actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+        }
+
+        /* Tableaux */
+        .table-container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 1200px;
+        }
+
+        th {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
+            color: white;
+            padding: 12px 8px;
+            text-align: center;
+            font-weight: 600;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            white-space: nowrap;
+            font-size: 0.85em;
+        }
+
+        td {
+            padding: 10px 8px;
+            border: 1px solid var(--border);
+            text-align: center;
+        }
+
+        tr:nth-child(even) {
+            background-color: #f8f9fa;
+        }
+
+        tr:hover {
+            background-color: #e9ecef;
+        }
+
+        /* Inputs dans les cellules */
+        td input {
+            width: 100%;
+            padding: 6px;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            text-align: right;
+            font-family: Georgia, serif;
+        }
+
+        td input:focus {
+            border-color: var(--accent);
+            outline: none;
+        }
+
+        /* Cellules en lecture seule */
+        td.readonly {
+            background-color: #e9ecef;
+            color: #6c757d;
+            font-weight: 600;
+        }
+
+        /* Évolutions */
+        .evolution-positive {
+            color: var(--success);
+            font-weight: bold;
+        }
+
+        .evolution-negative {
+            color: var(--danger);
+            font-weight: bold;
+        }
+
+        /* Doublons */
+        tr.duplicate {
+            background-color: var(--duplicate) !important;
+        }
+
+        /* Messages */
+        .message {
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            font-weight: 600;
+        }
+
+        .message.success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .message.error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .message.info {
+            background-color: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+
+        /* Responsive */
+        @media (max-width: 1200px) {
+            .header-container {
+                grid-template-columns: 1fr;
+                text-align: center;
+            }
+
+            .header-left, .header-right {
+                justify-content: center;
+            }
+
+            .selectors {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Notifications cloud */
+        .cloud-status {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 10px 15px;
+            background: white;
+            border-radius: 6px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            font-size: 0.9em;
+            z-index: 1000;
+            display: none;
+        }
+
+        .cloud-status.show {
+            display: block;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        .cloud-status.success {
+            border-left: 4px solid var(--success);
+        }
+
+        .cloud-status.error {
+            border-left: 4px solid var(--danger);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- HEADER RÉALIGNÉ -->
+        <header>
+            <div class="header-container">
+                <!-- Zone Gauche : Logo -->
+                <div class="header-left">
+                    <img src="logo_ballanfat.png" alt="Ballanfat Autocars" class="logo-header">
+                </div>
+
+                <!-- Zone Centre : Titre -->
+                <div class="header-center">
+                    <h1>GRILLE TARIFAIRE</h1>
+                    <div class="subtitle">Autocars Ballanfat - Version 11.0.14 FINALE</div>
+                </div>
+
+                <!-- Zone Droite : Actions principales -->
+                <div class="header-right">
+                    <button class="btn-success" onclick="saveGrid()">💾 Sauvegarder</button>
+                    <button class="btn-primary" onclick="showImportExport()">📁 Import/Export</button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Sélecteurs -->
+        <div class="selectors">
+            <div class="form-group">
+                <label for="clientSelect">Client :</label>
+                <select id="clientSelect" onchange="onClientChange()">
+                    <option value="">-- Sélectionner un client --</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="yearSelect">Année :</label>
+                <select id="yearSelect" onchange="onYearChange()">
+                    <option value="">-- Sélectionner une année --</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="tvaInput">TVA (%) :</label>
+                <input type="number" id="tvaInput" min="1" max="100" value="10" onchange="onTVAChange()">
+            </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="actions">
+            <button class="btn-primary" onclick="createNewClient()">➕ Nouveau Client</button>
+            <button class="btn-primary" onclick="createNewYear()">➕ Nouvelle Année</button>
+            <button class="btn-primary" onclick="addDestination()">➕ Ajouter Destination</button>
+            <button class="btn-warning" onclick="deleteGrid()">🗑️ Supprimer Grille</button>
+        </div>
+
+        <!-- Message zone -->
+        <div id="messageZone"></div>
+
+        <!-- Table Destinations -->
+        <div class="table-container">
+            <h2>📍 Destinations (Navettes Aller-Retour)</h2>
+            <table id="destinationsTable">
+                <thead>
+                    <tr>
+                        <th rowspan="2">Destination</th>
+                        <th rowspan="2">Trajet</th>
+                        <th colspan="3">VL (- 9 places)</th>
+                        <th colspan="3">Minicar 22 (- 23 pl.)</th>
+                        <th colspan="3">Minicar 33 (22-33 pl.)</th>
+                        <th colspan="3">Autocar 55 (33-55 pl.)</th>
+                        <th colspan="3">Autocar 64 (55-64 pl.)</th>
+                        <th rowspan="2">Majorations</th>
+                        <th rowspan="2">Actions</th>
+                    </tr>
+                    <tr>
+                        <th>N° Fact.</th>
+                        <th>HT</th>
+                        <th>TTC</th>
+                        <th>N° Fact.</th>
+                        <th>HT</th>
+                        <th>TTC</th>
+                        <th>N° Fact.</th>
+                        <th>HT</th>
+                        <th>TTC</th>
+                        <th>N° Fact.</th>
+                        <th>HT</th>
+                        <th>TTC</th>
+                        <th>N° Fact.</th>
+                        <th>HT</th>
+                        <th>TTC</th>
+                    </tr>
+                </thead>
+                <tbody id="destinationsBody">
+                    <!-- Lignes dynamiques -->
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Table Transferts -->
+        <div class="table-container">
+            <h2>🚉 Transferts (Gares / Aéroports)</h2>
+            <table id="transfertsTable">
+                <thead>
+                    <tr>
+                        <th rowspan="2">Transfert</th>
+                        <th rowspan="2">Trajet</th>
+                        <th colspan="3">VL (- 9 places)</th>
+                        <th colspan="3">Minicar 22 (- 23 pl.)</th>
+                        <th colspan="3">Minicar 33 (22-33 pl.)</th>
+                        <th colspan="3">Autocar 55 (33-55 pl.)</th>
+                        <th colspan="3">Autocar 64 (55-64 pl.)</th>
+                        <th rowspan="2">Majorations</th>
+                        <th rowspan="2">Actions</th>
+                    </tr>
+                    <tr>
+                        <th>N° Fact.</th>
+                        <th>HT</th>
+                        <th>TTC</th>
+                        <th>N° Fact.</th>
+                        <th>HT</th>
+                        <th>TTC</th>
+                        <th>N° Fact.</th>
+                        <th>HT</th>
+                        <th>TTC</th>
+                        <th>N° Fact.</th>
+                        <th>HT</th>
+                        <th>TTC</th>
+                        <th>N° Fact.</th>
+                        <th>HT</th>
+                        <th>TTC</th>
+                    </tr>
+                </thead>
+                <tbody id="transfertsBody">
+                    <!-- Lignes dynamiques -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Notification cloud -->
+    <div id="cloudStatus" class="cloud-status"></div>
+
+    <script>
+        // ==================== CONFIGURATION SUPABASE ====================
+        const SUPABASE_URL = 'https://bgkpjrjnbhhozalmiogg.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJna3BqcmpuYmhob3phbG1pb2dnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzU1MDcxMjAsImV4cCI6MjA1MTA4MzEyMH0.r3kkV5nKlLbQLxoN7f-QI3hj5SFCjYmHtSl5tN6vZNM';
+        
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        // ==================== VARIABLES GLOBALES ====================
+        let currentClient = '';
+        let currentYear = '';
+        let currentTVA = 10;
+        let gridData = {
+            destinations: [],
+            transferts: []
+        };
+
+        const STORAGE_PREFIX = 'ballanfat_grille_v11_0_14::';
+
+        // ==================== INITIALISATION ====================
+        document.addEventListener('DOMContentLoaded', async () => {
+            console.log('🚀 Initialisation v11.0.14...');
+            
+            await loadClientsFromCloud();
+            
+            // CORRECTION 1 : Charger automatiquement la dernière grille utilisée
+            const lastClient = localStorage.getItem('lastClient');
+            const lastYear = localStorage.getItem('lastYear');
+            
+            if (lastClient && lastYear) {
+                document.getElementById('clientSelect').value = lastClient;
+                currentClient = lastClient;
+                await loadYearsForClient(lastClient);
+                document.getElementById('yearSelect').value = lastYear;
+                currentYear = lastYear;
+                await loadGrid();
+            }
+            
+            console.log('✅ Initialisation terminée');
+        });
+
+        // ==================== GESTION CLIENTS ====================
+        async function loadClientsFromCloud() {
+            try {
+                const { data, error } = await supabase
+                    .from('clients')
+                    .select('*')
+                    .order('name');
+
+                if (error) throw error;
+
+                const select = document.getElementById('clientSelect');
+                select.innerHTML = '<option value="">-- Sélectionner un client --</option>';
+
+                // CORRECTION 5 : Éviter les doublons
+                const uniqueClients = [...new Map(data.map(c => [c.name, c])).values()];
+
+                uniqueClients.forEach(client => {
+                    const option = document.createElement('option');
+                    option.value = client.name;
+                    option.textContent = client.name;
+                    select.appendChild(option);
+                });
+
+                console.log(`✅ ${uniqueClients.length} clients chargés`);
+            } catch (error) {
+                console.error('❌ Erreur chargement clients:', error);
+                showMessage('Erreur chargement clients: ' + error.message, 'error');
+            }
+        }
+
+        async function createNewClient() {
+            const name = prompt('Nom du nouveau client :');
+            if (!name || !name.trim()) return;
+
+            try {
+                // CORRECTION 2 : Vérifier si le client existe déjà
+                const { data: existing } = await supabase
+                    .from('clients')
+                    .select('id')
+                    .eq('name', name.trim())
+                    .single();
+
+                if (existing) {
+                    showMessage('Ce client existe déjà !', 'error');
+                    return;
+                }
+
+                // Créer le client
+                const { data, error } = await supabase
+                    .from('clients')
+                    .insert({ name: name.trim() })
+                    .select()
+                    .single();
+
+                if (error) throw error;
+
+                await loadClientsFromCloud();
+                document.getElementById('clientSelect').value = name.trim();
+                currentClient = name.trim();
+                
+                showMessage('Client créé avec succès !', 'success');
+                showCloudStatus('✅ Client créé dans le cloud', 'success');
+            } catch (error) {
+                console.error('❌ Erreur création client:', error);
+                showMessage('Erreur création client: ' + error.message, 'error');
+            }
+        }
+
+        async function onClientChange() {
+            const select = document.getElementById('clientSelect');
+            currentClient = select.value;
+            
+            if (currentClient) {
+                localStorage.setItem('lastClient', currentClient);
+                await loadYearsForClient(currentClient);
+            } else {
+                document.getElementById('yearSelect').innerHTML = '<option value="">-- Sélectionner une année --</option>';
+                currentYear = '';
+            }
+        }
+
+        // ==================== GESTION ANNÉES ====================
+        async function loadYearsForClient(clientName) {
+            try {
+                // Récupérer l'ID du client
+                const { data: clientData } = await supabase
+                    .from('clients')
+                    .select('id')
+                    .eq('name', clientName)
+                    .single();
+
+                if (!clientData) return;
+
+                // Récupérer les années
+                const { data, error } = await supabase
+                    .from('grilles')
+                    .select('year')
+                    .eq('client_id', clientData.id);
+
+                if (error) throw error;
+
+                const select = document.getElementById('yearSelect');
+                select.innerHTML = '<option value="">-- Sélectionner une année --</option>';
+
+                // CORRECTION 3 : Trier les années en ordre décroissant
+                const years = [...new Set(data.map(g => g.year))].sort((a, b) => b - a);
+
+                years.forEach(year => {
+                    const option = document.createElement('option');
+                    option.value = year;
+                    option.textContent = year;
+                    select.appendChild(option);
+                });
+
+                console.log(`✅ ${years.length} années chargées pour ${clientName}`);
+            } catch (error) {
+                console.error('❌ Erreur chargement années:', error);
+            }
+        }
+
+        async function createNewYear() {
+            if (!currentClient) {
+                showMessage('Veuillez d\'abord sélectionner un client !', 'error');
+                return;
+            }
+
+            const year = prompt('Nouvelle année (ex: 2026) :');
+            if (!year || isNaN(year)) return;
+
+            const yearInt = parseInt(year);
+            if (yearInt < 2000 || yearInt > 2100) {
+                showMessage('Année invalide (2000-2100)', 'error');
+                return;
+            }
+
+            currentYear = yearInt.toString();
+            document.getElementById('yearSelect').value = currentYear;
+            localStorage.setItem('lastYear', currentYear);
+            
+            // Créer grille vide
+            gridData = { destinations: [], transferts: [] };
+            renderGrid();
+            await saveGrid();
+            await loadYearsForClient(currentClient);
+        }
+
+        async function onYearChange() {
+            const select = document.getElementById('yearSelect');
+            currentYear = select.value;
+            
+            if (currentYear) {
+                localStorage.setItem('lastYear', currentYear);
+                await loadGrid();
+            }
+        }
+
+        function onTVAChange() {
+            currentTVA = parseFloat(document.getElementById('tvaInput').value) || 10;
+            recalculateAllTTC();
+        }
+
+        // ==================== SAUVEGARDE / CHARGEMENT ====================
+        async function saveGrid() {
+            if (!currentClient || !currentYear) {
+                showMessage('Sélectionnez un client et une année !', 'error');
+                return;
+            }
+
+            try {
+                // Récupérer ID client
+                const { data: clientData } = await supabase
+                    .from('clients')
+                    .select('id')
+                    .eq('name', currentClient)
+                    .single();
+
+                if (!clientData) throw new Error('Client introuvable');
+
+                // Sauvegarder dans Supabase
+                const { error } = await supabase
+                    .from('grilles')
+                    .upsert({
+                        client_id: clientData.id,
+                        year: parseInt(currentYear),
+                        data: gridData,
+                        tva: currentTVA
+                    }, {
+                        onConflict: 'client_id,year'
+                    });
+
+                if (error) throw error;
+
+                // Backup localStorage
+                const key = `${STORAGE_PREFIX}${currentClient}::${currentYear}`;
+                localStorage.setItem(key, JSON.stringify({
+                    data: gridData,
+                    tva: currentTVA
+                }));
+
+                showMessage('✅ Grille sauvegardée !', 'success');
+                showCloudStatus('☁️ Sauvegardé dans le cloud', 'success');
+            } catch (error) {
+                console.error('❌ Erreur sauvegarde:', error);
+                showMessage('Erreur sauvegarde: ' + error.message, 'error');
+            }
+        }
+
+        async function loadGrid() {
+            if (!currentClient || !currentYear) return;
+
+            try {
+                // Charger depuis Supabase
+                const { data: clientData } = await supabase
+                    .from('clients')
+                    .select('id')
+                    .eq('name', currentClient)
+                    .single();
+
+                if (!clientData) return;
+
+                const { data, error } = await supabase
+                    .from('grilles')
+                    .select('*')
+                    .eq('client_id', clientData.id)
+                    .eq('year', parseInt(currentYear))
+                    .single();
+
+                if (data && !error) {
+                    gridData = data.data || { destinations: [], transferts: [] };
+                    currentTVA = data.tva || 10;
+                    document.getElementById('tvaInput').value = currentTVA;
+                    renderGrid();
+                    showCloudStatus('☁️ Chargé depuis le cloud', 'success');
+                    return;
+                }
+
+                // Fallback localStorage
+                const key = `${STORAGE_PREFIX}${currentClient}::${currentYear}`;
+                const stored = localStorage.getItem(key);
+                
+                if (stored) {
+                    const parsed = JSON.parse(stored);
+                    gridData = parsed.data || { destinations: [], transferts: [] };
+                    currentTVA = parsed.tva || 10;
+                    document.getElementById('tvaInput').value = currentTVA;
+                    renderGrid();
+                }
+            } catch (error) {
+                console.error('❌ Erreur chargement:', error);
+            }
+        }
+
+        async function deleteGrid() {
+            if (!currentClient || !currentYear) return;
+
+            if (!confirm(`Supprimer la grille ${currentClient} - ${currentYear} ?`)) return;
+
+            try {
+                const { data: clientData } = await supabase
+                    .from('clients')
+                    .select('id')
+                    .eq('name', currentClient)
+                    .single();
+
+                if (clientData) {
+                    await supabase
+                        .from('grilles')
+                        .delete()
+                        .eq('client_id', clientData.id)
+                        .eq('year', parseInt(currentYear));
+                }
+
+                // Supprimer localStorage
+                const key = `${STORAGE_PREFIX}${currentClient}::${currentYear}`;
+                localStorage.removeItem(key);
+
+                gridData = { destinations: [], transferts: [] };
+                renderGrid();
+                await loadYearsForClient(currentClient);
+                
+                showMessage('Grille supprimée', 'success');
+            } catch (error) {
+                console.error('❌ Erreur suppression:', error);
+            }
+        }
+
+        // ==================== GESTION DESTINATIONS ====================
+        function addDestination() {
+            const destination = prompt('Nom de la destination :');
+            if (!destination) return;
+
+            const trajet = prompt('Trajet (ex: Aller et retour) :');
+            if (!trajet) return;
+
+            gridData.destinations.push({
+                destination: destination.trim(),
+                trajet: trajet.trim(),
+                vl: { facture: '', ht: '', ttc: '' },
+                mc22: { facture: '', ht: '', ttc: '' },
+                mc33: { facture: '', ht: '', ttc: '' },
+                ac55: { facture: '', ht: '', ttc: '' },
+                ac64: { facture: '', ht: '', ttc: '' },
+                majorations: ''
+            });
+
+            renderGrid();
+            saveGrid();
+        }
+
+        function deleteDestination(index) {
+            if (confirm('Supprimer cette destination ?')) {
+                gridData.destinations.splice(index, 1);
+                renderGrid();
+                saveGrid();
+            }
+        }
+
+        function addTransfert() {
+            const transfert = prompt('Type de transfert (ex: Gare, Aéroport) :');
+            if (!transfert) return;
+
+            const trajet = prompt('Trajet :');
+            if (!trajet) return;
+
+            gridData.transferts.push({
+                transfert: transfert.trim(),
+                trajet: trajet.trim(),
+                vl: { facture: '', ht: '', ttc: '' },
+                mc22: { facture: '', ht: '', ttc: '' },
+                mc33: { facture: '', ht: '', ttc: '' },
+                ac55: { facture: '', ht: '', ttc: '' },
+                ac64: { facture: '', ht: '', ttc: '' },
+                majorations: ''
+            });
+
+            renderGrid();
+            saveGrid();
+        }
+
+        function deleteTransfert(index) {
+            if (confirm('Supprimer ce transfert ?')) {
+                gridData.transferts.splice(index, 1);
+                renderGrid();
+                saveGrid();
+            }
+        }
+
+        // ==================== RENDU TABLEAUX ====================
+        function renderGrid() {
+            renderDestinations();
+            renderTransferts();
+        }
+
+        function renderDestinations() {
+            const tbody = document.getElementById('destinationsBody');
+            tbody.innerHTML = '';
+
+            gridData.destinations.forEach((dest, index) => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td><input type="text" value="${dest.destination}" onchange="updateDestField(${index}, 'destination', this.value)"></td>
+                    <td><input type="text" value="${dest.trajet}" onchange="updateDestField(${index}, 'trajet', this.value)"></td>
+                    
+                    <td><input type="text" value="${dest.vl.facture}" onchange="updateDestVehicule(${index}, 'vl', 'facture', this.value)"></td>
+                    <td><input type="number" step="0.01" value="${dest.vl.ht}" onchange="updateDestVehicule(${index}, 'vl', 'ht', this.value)"></td>
+                    <td class="readonly">${dest.vl.ttc}</td>
+                    
+                    <td><input type="text" value="${dest.mc22.facture}" onchange="updateDestVehicule(${index}, 'mc22', 'facture', this.value)"></td>
+                    <td><input type="number" step="0.01" value="${dest.mc22.ht}" onchange="updateDestVehicule(${index}, 'mc22', 'ht', this.value)"></td>
+                    <td class="readonly">${dest.mc22.ttc}</td>
+                    
+                    <td><input type="text" value="${dest.mc33.facture}" onchange="updateDestVehicule(${index}, 'mc33', 'facture', this.value)"></td>
+                    <td><input type="number" step="0.01" value="${dest.mc33.ht}" onchange="updateDestVehicule(${index}, 'mc33', 'ht', this.value)"></td>
+                    <td class="readonly">${dest.mc33.ttc}</td>
+                    
+                    <td><input type="text" value="${dest.ac55.facture}" onchange="updateDestVehicule(${index}, 'ac55', 'facture', this.value)"></td>
+                    <td><input type="number" step="0.01" value="${dest.ac55.ht}" onchange="updateDestVehicule(${index}, 'ac55', 'ht', this.value)"></td>
+                    <td class="readonly">${dest.ac55.ttc}</td>
+                    
+                    <td><input type="text" value="${dest.ac64.facture}" onchange="updateDestVehicule(${index}, 'ac64', 'facture', this.value)"></td>
+                    <td><input type="number" step="0.01" value="${dest.ac64.ht}" onchange="updateDestVehicule(${index}, 'ac64', 'ht', this.value)"></td>
+                    <td class="readonly">${dest.ac64.ttc}</td>
+                    
+                    <td><input type="text" value="${dest.majorations}" onchange="updateDestField(${index}, 'majorations', this.value)"></td>
+                    <td><button class="btn-danger" onclick="deleteDestination(${index})">🗑️</button></td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function renderTransferts() {
+            const tbody = document.getElementById('transfertsBody');
+            tbody.innerHTML = '';
+
+            gridData.transferts.forEach((trans, index) => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td><input type="text" value="${trans.transfert}" onchange="updateTransField(${index}, 'transfert', this.value)"></td>
+                    <td><input type="text" value="${trans.trajet}" onchange="updateTransField(${index}, 'trajet', this.value)"></td>
+                    
+                    <td><input type="text" value="${trans.vl.facture}" onchange="updateTransVehicule(${index}, 'vl', 'facture', this.value)"></td>
+                    <td><input type="number" step="0.01" value="${trans.vl.ht}" onchange="updateTransVehicule(${index}, 'vl', 'ht', this.value)"></td>
+                    <td class="readonly">${trans.vl.ttc}</td>
+                    
+                    <td><input type="text" value="${trans.mc22.facture}" onchange="updateTransVehicule(${index}, 'mc22', 'facture', this.value)"></td>
+                    <td><input type="number" step="0.01" value="${trans.mc22.ht}" onchange="updateTransVehicule(${index}, 'mc22', 'ht', this.value)"></td>
+                    <td class="readonly">${trans.mc22.ttc}</td>
+                    
+                    <td><input type="text" value="${trans.mc33.facture}" onchange="updateTransVehicule(${index}, 'mc33', 'facture', this.value)"></td>
+                    <td><input type="number" step="0.01" value="${trans.mc33.ht}" onchange="updateTransVehicule(${index}, 'mc33', 'ht', this.value)"></td>
+                    <td class="readonly">${trans.mc33.ttc}</td>
+                    
+                    <td><input type="text" value="${trans.ac55.facture}" onchange="updateTransVehicule(${index}, 'ac55', 'facture', this.value)"></td>
+                    <td><input type="number" step="0.01" value="${trans.ac55.ht}" onchange="updateTransVehicule(${index}, 'ac55', 'ht', this.value)"></td>
+                    <td class="readonly">${trans.ac55.ttc}</td>
+                    
+                    <td><input type="text" value="${trans.ac64.facture}" onchange="updateTransVehicule(${index}, 'ac64', 'facture', this.value)"></td>
+                    <td><input type="number" step="0.01" value="${trans.ac64.ht}" onchange="updateTransVehicule(${index}, 'ac64', 'ht', this.value)"></td>
+                    <td class="readonly">${trans.ac64.ttc}</td>
+                    
+                    <td><input type="text" value="${trans.majorations}" onchange="updateTransField(${index}, 'majorations', this.value)"></td>
+                    <td><button class="btn-danger" onclick="deleteTransfert(${index})">🗑️</button></td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // ==================== MISES À JOUR ====================
+        function updateDestField(index, field, value) {
+            gridData.destinations[index][field] = value;
+            saveGrid();
+        }
+
+        function updateDestVehicule(index, vehicule, field, value) {
+            gridData.destinations[index][vehicule][field] = value;
+            
+            if (field === 'ht') {
+                const ht = parseFloat(value) || 0;
+                const ttc = ht * (1 + currentTVA / 100);
+                gridData.destinations[index][vehicule].ttc = ttc.toFixed(2);
+                renderDestinations();
+            }
+            
+            saveGrid();
+        }
+
+        function updateTransField(index, field, value) {
+            gridData.transferts[index][field] = value;
+            saveGrid();
+        }
+
+        function updateTransVehicule(index, vehicule, field, value) {
+            gridData.transferts[index][vehicule][field] = value;
+            
+            if (field === 'ht') {
+                const ht = parseFloat(value) || 0;
+                const ttc = ht * (1 + currentTVA / 100);
+                gridData.transferts[index][vehicule].ttc = ttc.toFixed(2);
+                renderTransferts();
+            }
+            
+            saveGrid();
+        }
+
+        function recalculateAllTTC() {
+            gridData.destinations.forEach(dest => {
+                ['vl', 'mc22', 'mc33', 'ac55', 'ac64'].forEach(v => {
+                    const ht = parseFloat(dest[v].ht) || 0;
+                    dest[v].ttc = (ht * (1 + currentTVA / 100)).toFixed(2);
+                });
+            });
+
+            gridData.transferts.forEach(trans => {
+                ['vl', 'mc22', 'mc33', 'ac55', 'ac64'].forEach(v => {
+                    const ht = parseFloat(trans[v].ht) || 0;
+                    trans[v].ttc = (ht * (1 + currentTVA / 100)).toFixed(2);
+                });
+            });
+
+            renderGrid();
+            saveGrid();
+        }
+
+        // ==================== IMPORT/EXPORT ====================
+        function showImportExport() {
+            const action = prompt('1 = Exporter JSON\n2 = Importer JSON\n3 = Exporter CSV');
+            
+            if (action === '1') exportJSON();
+            else if (action === '2') importJSON();
+            else if (action === '3') exportCSV();
+        }
+
+        function exportJSON() {
+            if (!currentClient || !currentYear) {
+                showMessage('Sélectionnez un client et une année !', 'error');
+                return;
+            }
+
+            const data = {
+                client: currentClient,
+                year: currentYear,
+                tva: currentTVA,
+                grid: gridData
+            };
+
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `grille_${currentClient}_${currentYear}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+
+            showMessage('✅ Export JSON terminé', 'success');
+        }
+
+        function importJSON() {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.json';
+            input.onchange = async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                const reader = new FileReader();
+                reader.onload = async (event) => {
+                    try {
+                        const data = JSON.parse(event.target.result);
+                        
+                        // CORRECTION 5 : Éviter doublons clients
+                        const { data: existing } = await supabase
+                            .from('clients')
+                            .select('id')
+                            .eq('name', data.client)
+                            .single();
+
+                        if (!existing) {
+                            await supabase.from('clients').insert({ name: data.client });
+                        }
+
+                        currentClient = data.client;
+                        currentYear = data.year;
+                        currentTVA = data.tva || 10;
+                        gridData = data.grid;
+
+                        document.getElementById('clientSelect').value = currentClient;
+                        document.getElementById('yearSelect').value = currentYear;
+                        document.getElementById('tvaInput').value = currentTVA;
+
+                        await loadClientsFromCloud();
+                        await loadYearsForClient(currentClient);
+                        renderGrid();
+                        await saveGrid();
+
+                        showMessage('✅ Import réussi', 'success');
+                    } catch (error) {
+                        console.error('❌ Erreur import:', error);
+                        showMessage('Erreur import: ' + error.message, 'error');
+                    }
+                };
+                reader.readAsText(file);
+            };
+            input.click();
+        }
+
+        function exportCSV() {
+            if (!currentClient || !currentYear) {
+                showMessage('Sélectionnez un client et une année !', 'error');
+                return;
+            }
+
+            let csv = 'Type;Destination/Transfert;Trajet;VL Fact;VL HT;VL TTC;MC22 Fact;MC22 HT;MC22 TTC;MC33 Fact;MC33 HT;MC33 TTC;AC55 Fact;AC55 HT;AC55 TTC;AC64 Fact;AC64 HT;AC64 TTC;Majorations\n';
+
+            gridData.destinations.forEach(d => {
+                csv += `Destination;${d.destination};${d.trajet};${d.vl.facture};${d.vl.ht};${d.vl.ttc};${d.mc22.facture};${d.mc22.ht};${d.mc22.ttc};${d.mc33.facture};${d.mc33.ht};${d.mc33.ttc};${d.ac55.facture};${d.ac55.ht};${d.ac55.ttc};${d.ac64.facture};${d.ac64.ht};${d.ac64.ttc};${d.majorations}\n`;
+            });
+
+            gridData.transferts.forEach(t => {
+                csv += `Transfert;${t.transfert};${t.trajet};${t.vl.facture};${t.vl.ht};${t.vl.ttc};${t.mc22.facture};${t.mc22.ht};${t.mc22.ttc};${t.mc33.facture};${t.mc33.ht};${t.mc33.ttc};${t.ac55.facture};${t.ac55.ht};${t.ac55.ttc};${t.ac64.facture};${t.ac64.ht};${t.ac64.ttc};${t.majorations}\n`;
+            });
+
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `grille_${currentClient}_${currentYear}.csv`;
+            a.click();
+            URL.revokeObjectURL(url);
+
+            showMessage('✅ Export CSV terminé', 'success');
+        }
+
+        // ==================== NOTIFICATIONS ====================
+        function showMessage(text, type) {
+            const zone = document.getElementById('messageZone');
+            zone.innerHTML = `<div class="message ${type}">${text}</div>`;
+            setTimeout(() => zone.innerHTML = '', 5000);
+        }
+
+        function showCloudStatus(text, type) {
+            const status = document.getElementById('cloudStatus');
+            status.textContent = text;
+            status.className = `cloud-status ${type} show`;
+            setTimeout(() => status.classList.remove('show'), 3000);
+        }
+    </script>
+</body>
+</html>
