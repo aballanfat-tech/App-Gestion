@@ -12,31 +12,24 @@ const SUPABASE_CONFIG = {
   key: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF5em91cGxtbm5sb29vZmN4YnN6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjY5MzE2OTAsImV4cCI6MjA4MjUwNzY5MH0.RUs4_g2k0c0n62fEZQAKdG4FtfoqFcFULxrZESopZ4k'
 };
 
-// ✅ EXPOSITION GLOBALE (OBLIGATOIRE)
 window.SUPABASE_URL = SUPABASE_CONFIG.url;
 window.SUPABASE_ANON_KEY = SUPABASE_CONFIG.key;
 
-// ✅ INITIALISATION OPTIONNELLE (OK)
 function initSupabase() {
   if (typeof window.supabase === 'undefined' || !window.supabase.createClient) {
     console.error('❌ Supabase non chargé');
     return;
   }
 
-  window.SupabaseClient = window.supabase.createClient(
-    window.SUPABASE_URL,
-    window.SUPABASE_ANON_KEY
+  // ✅ IMPORTANT : on crée supabaseClient (utilisé partout dans le fichier)
+  const supabaseClient = window.supabase.createClient(
+    SUPABASE_CONFIG.url,
+    SUPABASE_CONFIG.key
   );
 
-  console.log('✅ Supabase initialisé correctement');
-}
+  // ✅ on expose aussi pour les autres pages si besoin
+  window.SupabaseClient = supabaseClient;
 
-// Auto-init
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', initSupabase);
-} else {
-  initSupabase();
-}
 
 
     // ========================================
