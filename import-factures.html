@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Import Factures</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 0; background:#fafafa; }
+    header { display:flex; align-items:center; justify-content:space-between; padding:14px 18px; background:#fff; border-bottom:1px solid #e5e5e5; position:sticky; top:0; }
+    .btn { cursor:pointer; border:1px solid #ddd; background:#fff; padding:10px 12px; border-radius:10px; }
+    .btn:disabled { opacity:.5; cursor:not-allowed; }
+    main { max-width: 980px; margin: 18px auto; padding: 0 14px; }
+    .card { background:#fff; border:1px solid #e5e5e5; border-radius:14px; padding:14px; margin-bottom:14px; }
+    .drop { border:2px dashed #bbb; border-radius:14px; padding:22px; text-align:center; background:#fcfcfc; }
+    .drop.drag { border-color:#333; background:#fff; }
+    table { width:100%; border-collapse: collapse; }
+    th, td { border-bottom:1px solid #eee; padding:10px 8px; text-align:left; font-size:14px; }
+    th { font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:#666; }
+    .pill { display:inline-block; padding:4px 8px; border-radius:999px; border:1px solid #ddd; font-size:12px; }
+    .ok { border-color:#9ad39a; }
+    .err { border-color:#ffb3b3; }
+    .muted { color:#666; font-size:13px; }
+    .row-actions { display:flex; gap:8px; flex-wrap:wrap; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size:12px; }
+    .notice { background:#fff7d6; border:1px solid #f1d88a; padding:10px 12px; border-radius:12px; margin-bottom:14px; }
+  </style>
+</head>
+<body>
+  <header>
+    <div style="display:flex; align-items:center; gap:10px;">
+      <button class="btn" id="backBtn">⬅️ Retour Grille</button>
+      <strong>📤 Import Factures (V1)</strong>
+    </div>
+    <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+      <span class="muted" id="authStatus">Connexion…</span>
+      <button class="btn" id="loginBtn">Se connecter</button>
+      <button class="btn" id="logoutBtn" disabled>Se déconnecter</button>
+    </div>
+  </header>
+
+  <main>
+    <div class="notice">
+      <div><strong>Important :</strong> bucket <span class="mono">factures</span> = <strong>privé</strong> → il faut être connecté pour uploader.</div>
+      <div class="muted">V1 = Upload + création en base (<span class="mono">factures.statut = pending</span>). OCR/Extraction arrive Sprint 1.</div>
+    </div>
+
+    <div class="card">
+      <div class="drop" id="dropZone">
+        <div style="font-size:18px; margin-bottom:6px;">Glisse-dépose tes PDFs ici</div>
+        <div class="muted">PDF uniquement • max 10 MB/fichier • max 20 fichiers</div>
+        <div style="margin-top:12px;">
+          <input type="file" id="fileInput" accept="application/pdf" multiple />
+        </div>
+      </div>
+      <div style="margin-top:12px; display:flex; gap:10px; flex-wrap:wrap;">
+        <button class="btn" id="startUploadBtn" disabled>🚀 Uploader</button>
+        <button class="btn" id="clearBtn" disabled>🧹 Vider la liste</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div style="display:flex; align-items:center; justify-content:space-between;">
+        <strong>📄 Fichiers sélectionnés</strong>
+        <span class="muted" id="selectedCount">0</span>
+      </div>
+      <div style="overflow:auto; margin-top:10px;">
+        <table>
+          <thead>
+            <tr>
+              <th>Fichier</th>
+              <th>Taille</th>
+              <th>Statut</th>
+              <th>Facture ID</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="filesTbody">
+            <tr><td colspan="5" class="muted">Aucun fichier</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="./supabase-config.js"></script>
+
+  <script>
+    const MAX_FILES = 20;
+    const MAX_SIZE = 10 * 1024 * 1024;
+
+    function formatBytes(bytes) {
+      if (bytes < 1024) return bytes + " B";
+      const kb = bytes / 1024;
+      if (kb < 1024) return kb.toFixed(1) + " KB";
+      return (kb / 1024).toFixed(1) + " MB";
+    }
+
+    function isPdf(file) {
+      return file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+    }
+
+    function sanitizeFilename(name) {
+      return name.replace(/[^a-zA-Z0-9.\-_]/g, "_").replace(/_{2,}/g, "_");
+    }
+
+    const state = { files: [] };
+
+    const supabaseUrl = window.SUPABASE_URL;
+    const supabaseAnonKey = window.SUPABASE_ANON_KEY;
+
+    if (!supabaseUrl || !supabaseAnonKey) {
+      alert("Supabase config manquante. Vérifie supabase-config.js");
+      throw new Error("Supabase config missing");
+    }
+
+    const supabase = (window.SupabaseClient)
+      ? window.SupabaseClient
+      : window.supabase.createClient(supabaseUrl, supabaseAnonKey);
+
+    const dropZone = document.getElementById("dropZone");
+    const fileInput = document.getElementById("fileInput");
+    const startUploadBtn = document.getElementById("startUploadBtn");
+    const clearBtn = document.getElementById("clearBtn");
+    const filesTbody = document.getElementById("filesTbody");
+    const selectedCount = document.getElementById("selectedCount");
+
+    const authStatus = document.getElementById("authStatus");
+    const loginBtn = document.getElementById("loginBtn");
+    const logoutBtn = document.getElementById("logoutBtn");
+
+    document.getElementById("backBtn").onclick = () => {
+      window.location.href = "grille_v11_0_24_FINAL.html";
+    };
+
+    async function refreshAuthStatus() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        authStatus.textContent = "Connecté: " + (user.email || user.id);
+        logoutBtn.disabled = false;
+      } else {
+        authStatus.textContent = "Non connecté";
+        logoutBtn.disabled = true;
+      }
+      render();
+    }
+
+    loginBtn.onclick = async () => {
+      const email = prompt("Email Supabase :");
+      if (!email) return;
+      const password = prompt("Mot de passe :");
+      if (!password) return;
+
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) {
+        alert("Erreur login: " + error.message);
+        return;
+      }
+      await refreshAuthStatus();
+    };
+
+    logoutBtn.onclick = async () => {
+      await supabase.auth.signOut();
+      await refreshAuthStatus();
+    };
+
+    refreshAuthStatus();
+    supabase.auth.onAuthStateChange(() => refreshAuthStatus());
+
+    function render() {
+      selectedCount.textContent = String(state.files.length);
+      const anyUploading = state.files.some(f => f.status === "uploading");
+      startUploadBtn.disabled = state.files.length === 0 || anyUploading;
+      clearBtn.disabled = state.files.length === 0 || anyUploading;
+
+      filesTbody.innerHTML = "";
+      if (state.files.length === 0) {
+        filesTbody.innerHTML = `<tr><td colspan="5" class="muted">Aucun fichier</td></tr>`;
+        return;
+      }
+
+      for (let i = 0; i < state.files.length; i++) {
+        const item = state.files[i];
+        const statusPill = (() => {
+          if (item.status === "ready") return `<span class="pill">prêt</span>`;
+          if (item.status === "uploading") return `<span class="pill">upload…</span>`;
+          if (item.status === "uploaded") return `<span class="pill ok">uploadé</span>`;
+          if (item.status === "error") return `<span class="pill err">erreur</span>`;
+          return `<span class="pill">${item.status}</span>`;
+        })();
+        const factureId = item.factureId ? `<span class="mono">${item.factureId}</span>` : `<span class="muted">—</span>`;
+        filesTbody.insertAdjacentHTML("beforeend", `
+          <tr>
+            <td>${item.file.name}${item.error ? `<div class="muted">${item.error}</div>` : ""}</td>
+            <td>${formatBytes(item.file.size)}</td>
+            <td>${statusPill}</td>
+            <td>${factureId}</td>
+            <td><button class="btn" ${item.status==="uploading"?"disabled":""} data-i="${i}">Retirer</button></td>
+          </tr>
+        `);
+      }
+
+      filesTbody.querySelectorAll("button[data-i]").forEach(btn => {
+        btn.onclick = () => {
+          const idx = Number(btn.getAttribute("data-i"));
+          state.files.splice(idx, 1);
+          render();
+        };
+      });
+    }
+
+    function addFiles(fileList) {
+      const incoming = Array.from(fileList);
+      for (const file of incoming) {
+        if (state.files.length >= MAX_FILES) break;
+        if (!isPdf(file)) { state.files.push({ file, status:"error", error:"PDF uniquement" }); continue; }
+        if (file.size > MAX_SIZE) { state.files.push({ file, status:"error", error:"Max 10MB" }); continue; }
+        state.files.push({ file, status:"ready", error:null, factureId:null, uploadPath:null });
+      }
+      render();
+    }
+
+    fileInput.addEventListener("change", (e) => addFiles(e.target.files));
+    dropZone.addEventListener("dragover", (e) => { e.preventDefault(); dropZone.classList.add("drag"); });
+    dropZone.addEventListener("dragleave", () => dropZone.classList.remove("drag"));
+    dropZone.addEventListener("drop", (e) => {
+      e.preventDefault(); dropZone.classList.remove("drag");
+      if (e.dataTransfer?.files) addFiles(e.dataTransfer.files);
+    });
+
+    clearBtn.onclick = () => { state.files = []; render(); };
+
+    async function ensureLoggedIn() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Non connecté. Clique sur 'Se connecter' d'abord.");
+      return user;
+    }
+
+    async function uploadOne(item) {
+      item.status = "uploading";
+      item.error = null;
+      render();
+
+      try {
+        await ensureLoggedIn();
+
+        const year = new Date().getFullYear();
+        const ts = Date.now();
+        const filename = `${ts}_${sanitizeFilename(item.file.name)}`;
+        const path = `${year}/${filename}`;
+
+        const { data: up, error: upErr } = await supabase
+          .storage.from("factures")
+          .upload(path, item.file, { upsert:false, cacheControl:"3600", contentType:"application/pdf" });
+
+        if (upErr) throw upErr;
+
+        item.uploadPath = up.path;
+
+        const { data: inserted, error: dbErr } = await supabase
+          .from("factures")
+          .insert({ fichier_url: up.path, fichier_nom: item.file.name, statut:"pending", format_facture:"autre" })
+          .select("id").single();
+
+        if (dbErr) throw dbErr;
+
+        item.factureId = inserted.id;
+        item.status = "uploaded";
+        render();
+
+      } catch (err) {
+        item.status = "error";
+        item.error = err?.message || String(err);
+        render();
+      }
+    }
+
+    startUploadBtn.onclick = async () => {
+      const toUpload = state.files.filter(f => f.status === "ready");
+      for (const item of toUpload) await uploadOne(item);
+    };
+
+    render();
+  </script>
+</body>
+</html>
