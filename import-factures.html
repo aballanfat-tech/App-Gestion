@@ -32,6 +32,26 @@
     .msg.ok { border-color:#9ad39a; background:#f2fff2; }
     .msg.err { border-color:#ffb3b3; background:#fff2f2; }
     .msg.warn { border-color:#f1d88a; background:#fff7d6; }
+
+    /* ✅ Highlight */
+    mark.hl {
+      background: #ffe58f;
+      padding: 0 2px;
+      border-radius: 4px;
+    }
+    mark.hl[data-label] {
+      border-bottom: 2px solid #ffb300;
+      cursor: help;
+    }
+    .hlBox {
+      display:flex; gap:10px; flex-wrap:wrap;
+      padding:10px 12px; border:1px solid #eee; border-radius:12px;
+      background:#fafafa; margin:10px 0;
+    }
+    .hlTag {
+      border:1px solid #ddd; border-radius:999px; padding:4px 8px; font-size:12px;
+      background:#fff;
+    }
   </style>
 
   <!-- ✅ PDF.js (extraction texte pour PDF numériques) -->
@@ -42,7 +62,7 @@
   <header>
     <div style="display:flex; align-items:center; gap:10px;">
       <button class="btn" id="backBtn">⬅️ Retour</button>
-      <strong>📤 Import Factures (Upload + Extraction auto)</strong>
+      <strong>📤 Import Factures (Upload + Extraction + Parsing auto)</strong>
     </div>
 
     <div class="authBox">
@@ -59,8 +79,11 @@
   <main>
     <div class="notice">
       <div><strong>Important :</strong> bucket <span class="mono">factures</span> = <strong>privé</strong> → il faut être connecté pour uploader.</div>
-      <div class="muted">Après upload : extraction texte PDF automatique → DB (<span class="mono">factures.texte_ocr</span>) + statut <span class="mono">extracted</span>.</div>
-      <div class="muted small" style="margin-top:6px;">⚠️ Si un PDF est un scan (image), l’extraction native sera vide → on ajoutera un fallback OCR plus tard.</div>
+      <div class="muted">
+        Après upload : extraction texte PDF automatique → parsing automatique → DB remplie
+        (<span class="mono">donnees_brutes</span> + colonnes principales).
+      </div>
+      <div class="muted small" style="margin-top:6px;">⚠️ Si un PDF est un scan (image), l’extraction native peut être vide → on ajoutera un fallback OCR plus tard.</div>
     </div>
 
     <!-- Zone message globale (sans popup) -->
@@ -75,7 +98,7 @@
         </div>
       </div>
       <div style="margin-top:12px; display:flex; gap:10px; flex-wrap:wrap;">
-        <button class="btn" id="startUploadBtn" disabled>🚀 Uploader & Extraire</button>
+        <button class="btn" id="startUploadBtn" disabled>🚀 Uploader & Traiter</button>
         <button class="btn" id="clearBtn" disabled>🧹 Vider la liste</button>
       </div>
     </div>
@@ -104,7 +127,7 @@
       </div>
 
       <p class="muted" style="margin-top:10px;">
-        Le bouton <span class="mono">👁 Voir texte</span> affiche le texte enregistré dans Supabase (champ <span class="mono">texte_ocr</span>).
+        <span class="mono">👁 Voir texte</span> affiche le texte enregistré + surlignage des champs reconnus.
       </p>
     </div>
   </main>
@@ -141,9 +164,185 @@
     }
 
     // -----------------------------
+    // Highlight helpers
+    // -----------------------------
+    function escapeHtml(s) {
+      return (s || "").replace(/[&<>"']/g, c => ({
+        "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"
+      }[c]));
+    }
+    function escapeRegex(s) {
+      return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    }
+
+    function highlightText(rawText, highlights) {
+      let html = escapeHtml(rawText || "");
+      const sorted = [...highlights].sort((a,b) => (b.value.length - a.value.length));
+      for (const h of sorted) {
+        const token = (h.value || "").trim();
+        if (!token || token.length < 3) continue;
+        const re = new RegExp(escapeRegex(token), "g");
+        html = html.replace(re, (m) => `<mark class="hl" data-label="${escapeHtml(h.label)}" title="${escapeHtml(h.label)}">${escapeHtml(m)}</mark>`);
+      }
+      return html;
+    }
+
+    function renderHighlightsBox(data, highlights) {
+      const box = document.getElementById("hlBox");
+      if (!box) return;
+      const tags = [];
+
+      if (data.numero_facture) tags.push(`<span class="hlTag"># ${escapeHtml(String(data.numero_facture))}</span>`);
+      if (data.date_facture) tags.push(`<span class="hlTag">📅 ${escapeHtml(String(data.date_facture))}</span>`);
+      if (data.client_nom) tags.push(`<span class="hlTag">👤 ${escapeHtml(String(data.client_nom))}</span>`);
+
+      if (typeof data.total_ht === "number") tags.push(`<span class="hlTag">HT ${escapeHtml(String(data.total_ht))}</span>`);
+      if (typeof data.total_tva === "number") tags.push(`<span class="hlTag">TVA ${escapeHtml(String(data.total_tva))}</span>`);
+      if (typeof data.total_ttc === "number") tags.push(`<span class="hlTag">TTC ${escapeHtml(String(data.total_ttc))}</span>`);
+
+      if (!tags.length) {
+        box.innerHTML = `<span class="muted">Aucune donnée structurée détectée (parser).</span>`;
+      } else {
+        box.innerHTML = tags.join(" ");
+      }
+    }
+
+    // -----------------------------
+    // Parser V2 (adapté à ton exemple)
+    // -----------------------------
+    function normalizeNumber(str) {
+      if (!str) return null;
+      // "2 050,00" -> 2050.00
+      const n = String(str).replace(/\s/g, "").replace(",", ".");
+      const val = parseFloat(n.replace(/[^0-9.]/g, ""));
+      return Number.isFinite(val) ? val : null;
+    }
+
+    function parseFrenchDateAny(str) {
+      // supporte:
+      // - "17 février 2025"
+      // - "17 fevrier 2025"
+      // - "17/02/2025"
+      if (!str) return null;
+
+      // 1) dd/mm/yyyy
+      const m1 = String(str).match(/(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/);
+      if (m1) {
+        let d = parseInt(m1[1],10), mo = parseInt(m1[2],10), y = parseInt(m1[3],10);
+        if (y < 100) y += 2000;
+        return `${y.toString().padStart(4,"0")}-${mo.toString().padStart(2,"0")}-${d.toString().padStart(2,"0")}`;
+      }
+
+      // 2) "17 février 2025"
+      const months = {
+        "janvier":1, "fevrier":2, "février":2, "mars":3, "avril":4, "mai":5, "juin":6,
+        "juillet":7, "aout":8, "août":8, "septembre":9, "octobre":10, "novembre":11,
+        "decembre":12, "décembre":12
+      };
+
+      const m2 = String(str).toLowerCase().match(/\b(\d{1,2})\s+(janvier|février|fevrier|mars|avril|mai|juin|juillet|août|aout|septembre|octobre|novembre|décembre|decembre)\s+(\d{4})\b/);
+      if (!m2) return null;
+
+      const d = parseInt(m2[1],10);
+      const mo = months[m2[2]];
+      const y = parseInt(m2[3],10);
+      if (!mo) return null;
+
+      return `${y.toString().padStart(4,"0")}-${String(mo).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+    }
+
+    function findLastMatch(text, regex) {
+      // retourne le dernier match trouvé
+      let last = null;
+      const re = new RegExp(regex.source, regex.flags.includes("g") ? regex.flags : (regex.flags + "g"));
+      let m;
+      while ((m = re.exec(text)) !== null) last = m;
+      return last;
+    }
+
+    function parseInvoiceText(text) {
+      const t = text || "";
+      const out = {
+        version: "parser_v2_ballanfat",
+        parsed_at: new Date().toISOString(),
+        fields: {},
+        matches: [] // {label, value, raw}
+      };
+
+      // ✅ Numéro facture : "Facture FACT-2502-004"
+      const mFact = t.match(/\bFacture\s+([A-Z0-9][A-Z0-9\-\/]{3,})\b/i);
+      if (mFact) {
+        out.fields.numero_facture = mFact[1].trim();
+        out.matches.push({ label:"Numéro facture", value: mFact[1].trim(), raw: mFact[0] });
+      }
+
+      // ✅ Date facture : ex "17 février 2025" (juste après le numéro dans la même zone)
+      const mDateLong = t.match(/\b(\d{1,2}\s+(?:janvier|février|fevrier|mars|avril|mai|juin|juillet|août|aout|septembre|octobre|novembre|décembre|decembre)\s+\d{4})\b/i);
+      if (mDateLong) {
+        const iso = parseFrenchDateAny(mDateLong[1]);
+        if (iso) {
+          out.fields.date_facture = iso;
+          out.matches.push({ label:"Date facture", value: mDateLong[1], raw: mDateLong[1] });
+        }
+      } else {
+        // fallback dd/mm/yyyy
+        const mDate = t.match(/\b(\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4})\b/);
+        if (mDate) {
+          const iso = parseFrenchDateAny(mDate[1]);
+          if (iso) {
+            out.fields.date_facture = iso;
+            out.matches.push({ label:"Date facture", value: mDate[1], raw: mDate[1] });
+          }
+        }
+      }
+
+      // ✅ Client destinataire : "Destinataire ... Conditions"
+      // Dans ton texte, c'est une longue ligne : on prend le bloc entre "Destinataire" et "Conditions"
+      const mDest = t.match(/\bDestinataire\s+(.+?)\s+Conditions\b/si);
+      if (mDest) {
+        const block = mDest[1].replace(/\s+/g, " ").trim();
+        // on garde les ~80 premiers caractères comme "client"
+        const client = block.length > 80 ? block.slice(0, 80).trim() : block;
+        if (client.length > 2) {
+          out.fields.client_nom = client;
+          out.matches.push({ label:"Client", value: client, raw: "Destinataire " + client });
+        }
+      }
+
+      // ✅ Totaux : on prend le DERNIER match dans le texte (pour éviter colonnes HT du tableau)
+      const mHT  = findLastMatch(t, /Total\s*HT\s+([0-9\s.,]+)\s*(?:€|EUR)?/i);
+      const mTVA = findLastMatch(t, /TVA\s*\(10%\)\s+([0-9\s.,]+)\s*(?:€|EUR)?/i);
+      const mTTC = findLastMatch(t, /Total\s*TTC\s+([0-9\s.,]+)\s*(?:€|EUR)?/i);
+
+      if (mHT)  { out.fields.total_ht  = normalizeNumber(mHT[1]);  out.matches.push({label:"Total HT",  value:mHT[1].trim(), raw:mHT[0]}); }
+      if (mTVA) { out.fields.total_tva = normalizeNumber(mTVA[1]); out.matches.push({label:"TVA (10%)", value:mTVA[1].trim(), raw:mTVA[0]}); }
+      if (mTTC) { out.fields.total_ttc = normalizeNumber(mTTC[1]); out.matches.push({label:"Total TTC", value:mTTC[1].trim(), raw:mTTC[0]}); }
+
+      return out;
+    }
+
+    function buildHighlightsFromParsed(parsed) {
+      const hl = [];
+      if (!parsed) return hl;
+      // surligner les valeurs capturées exactement
+      for (const m of (parsed.matches || [])) {
+        if (!m?.value) continue;
+        hl.push({ label: m.label || "match", value: String(m.value) });
+      }
+      // dédupe
+      const seen = new Set();
+      return hl.filter(x => {
+        const key = x.label + "::" + x.value;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return x.value.length >= 3;
+      });
+    }
+
+    // -----------------------------
     // State
     // -----------------------------
-    const state = { files: [] }; // { file, status, error, factureId, uploadPath }
+    const state = { files: [] };
 
     // -----------------------------
     // UI
@@ -162,7 +361,6 @@
     const passInput = document.getElementById("passInput");
 
     document.getElementById("backBtn").onclick = () => {
-      // adapte si besoin
       window.location.href = "index.html";
     };
 
@@ -209,7 +407,6 @@
           authStatus.textContent = "Connecté: " + (user.email || user.id);
           logoutBtn.disabled = false;
 
-          // hide login fields when connected
           emailInput.style.display = "none";
           passInput.style.display = "none";
           loginBtn.style.display = "none";
@@ -267,7 +464,7 @@
       function render() {
         selectedCount.textContent = String(state.files.length);
 
-        const anyBusy = state.files.some(f => ["uploading","extracting"].includes(f.status));
+        const anyBusy = state.files.some(f => ["uploading","extracting","parsing"].includes(f.status));
         startUploadBtn.disabled = state.files.length === 0 || anyBusy;
         clearBtn.disabled = state.files.length === 0 || anyBusy;
 
@@ -283,8 +480,8 @@
           const statusPill = (() => {
             if (item.status === "ready") return `<span class="pill">prêt</span>`;
             if (item.status === "uploading") return `<span class="pill">upload…</span>`;
-            if (item.status === "uploaded") return `<span class="pill ok">uploadé</span>`;
             if (item.status === "extracting") return `<span class="pill">extraction…</span>`;
+            if (item.status === "parsing") return `<span class="pill">parsing…</span>`;
             if (item.status === "extracted") return `<span class="pill ok">extracted</span>`;
             if (item.status === "error") return `<span class="pill err">erreur</span>`;
             return `<span class="pill">${item.status}</span>`;
@@ -353,8 +550,8 @@
 
       clearBtn.onclick = () => { state.files = []; render(); };
 
-      // Upload + auto extract
-      async function uploadAndExtractOne(item) {
+      // Upload + auto extract + auto parse
+      async function uploadAndProcessOne(item) {
         item.status = "uploading";
         item.error = null;
         render();
@@ -374,7 +571,6 @@
             .upload(path, item.file, { upsert:false, cacheControl:"3600", contentType:"application/pdf" });
 
           if (upErr) throw upErr;
-
           item.uploadPath = up.path;
 
           // 2) Insert DB row
@@ -387,11 +583,9 @@
           if (dbErr) throw dbErr;
 
           item.factureId = inserted.id;
-          item.status = "uploaded";
-          render();
 
-          // 3) Auto extraction
-          await extractTextForItem(item);
+          // 3) Extraction + parsing
+          await extractAndParseForItem(item);
 
         } catch (err) {
           item.status = "error";
@@ -400,8 +594,7 @@
         }
       }
 
-      // Extraction texte (PDF numérique) - no popup
-      async function extractTextForItem(item) {
+      async function extractAndParseForItem(item) {
         item.status = "extracting";
         item.error = null;
         render();
@@ -409,6 +602,7 @@
         try {
           await ensureLoggedIn();
 
+          // Signed URL
           const { data: signed, error: signErr } = await sb
             .storage
             .from("factures")
@@ -416,10 +610,12 @@
 
           if (signErr) throw signErr;
 
+          // Fetch PDF
           const res = await fetch(signed.signedUrl);
           if (!res.ok) throw new Error("Téléchargement PDF impossible (signed URL)");
           const arrayBuffer = await res.arrayBuffer();
 
+          // Extract text
           const loadingTask = window.pdfjsLib.getDocument({ data: arrayBuffer });
           const pdf = await loadingTask.promise;
 
@@ -436,9 +632,31 @@
             throw new Error("Texte extrait vide/trop court (PDF scan ?)");
           }
 
+          item.status = "parsing";
+          render();
+
+          // Parse
+          const parsed = parseInvoiceText(fullText);
+
+          // Build payload
+          const payload = {
+            texte_ocr: fullText,
+            statut: "extracted",
+            donnees_brutes: parsed
+          };
+
+          if (parsed?.fields?.numero_facture) payload.numero_facture = parsed.fields.numero_facture;
+          if (parsed?.fields?.date_facture) payload.date_facture = parsed.fields.date_facture;
+          if (parsed?.fields?.client_nom) payload.client_nom = parsed.fields.client_nom;
+
+          if (typeof parsed?.fields?.total_ht === "number") payload.total_ht = parsed.fields.total_ht;
+          if (typeof parsed?.fields?.total_tva === "number") payload.total_tva = parsed.fields.total_tva;
+          if (typeof parsed?.fields?.total_ttc === "number") payload.total_ttc = parsed.fields.total_ttc;
+
+          // Save
           const { error: updErr } = await sb
             .from("factures")
-            .update({ texte_ocr: fullText, statut: "extracted" })
+            .update(payload)
             .eq("id", item.factureId);
 
           if (updErr) throw updErr;
@@ -451,7 +669,6 @@
           item.error = err?.message || String(err);
           render();
 
-          // log DB error (silent)
           if (item.factureId) {
             await sb.from("factures")
               .update({ statut:"error", error_message:item.error })
@@ -468,19 +685,18 @@
           return;
         }
 
-        setMsg("warn", "Traitement en cours : upload + extraction automatique…");
+        setMsg("warn", "Traitement en cours : upload + extraction + parsing automatiques…");
         const toProcess = state.files.filter(f => f.status === "ready");
 
         for (const item of toProcess) {
-          await uploadAndExtractOne(item);
+          await uploadAndProcessOne(item);
         }
 
-        // message final
         const okCount = state.files.filter(f => f.status === "extracted").length;
         const errCount = state.files.filter(f => f.status === "error").length;
 
-        if (errCount === 0) setMsg("ok", `✅ Terminé : ${okCount} facture(s) uploadée(s) + texte extrait.`);
-        else setMsg("err", `⚠️ Terminé : ${okCount} OK, ${errCount} en erreur (voir la colonne fichier).`);
+        if (errCount === 0) setMsg("ok", `✅ Terminé : ${okCount} facture(s) traitée(s).`);
+        else setMsg("err", `⚠️ Terminé : ${okCount} OK, ${errCount} en erreur (voir colonne fichier).`);
       };
 
       // Viewer (modale)
@@ -495,7 +711,11 @@
 
       copyTextBtn.onclick = async () => {
         try {
-          await navigator.clipboard.writeText(textContent.textContent || "");
+          // Copie du texte brut (sans balises)
+          const tmp = document.createElement("div");
+          tmp.innerHTML = textContent.innerHTML;
+          const plain = tmp.textContent || "";
+          await navigator.clipboard.writeText(plain);
           copyTextBtn.textContent = "✅ Copié";
           setTimeout(() => (copyTextBtn.textContent = "📋 Copier"), 900);
         } catch {
@@ -508,23 +728,29 @@
         if (!item?.factureId) return;
 
         try {
-          // ✅ FIX: pas de updated_at (colonne inexistante)
           const { data, error } = await sb
             .from("factures")
-            .select("id,fichier_nom,statut,texte_ocr,created_at")
+            .select("id,fichier_nom,statut,texte_ocr,created_at,donnees_brutes,numero_facture,date_facture,total_ht,total_tva,total_ttc,client_nom")
             .eq("id", item.factureId)
             .single();
 
           if (error) throw error;
 
           textMeta.innerHTML = `
-            <div><strong>Facture ID :</strong> <span class="mono">${data.id}</span></div>
-            <div><strong>Fichier :</strong> ${data.fichier_nom || "—"}</div>
-            <div><strong>Statut :</strong> <span class="mono">${data.statut || "—"}</span></div>
-            <div><strong>Créé le :</strong> ${data.created_at || "—"}</div>
+            <div><strong>Facture ID :</strong> <span class="mono">${escapeHtml(data.id)}</span></div>
+            <div><strong>Fichier :</strong> ${escapeHtml(data.fichier_nom || "—")}</div>
+            <div><strong>Statut :</strong> <span class="mono">${escapeHtml(data.statut || "—")}</span></div>
+            <div><strong>Créé le :</strong> ${escapeHtml(data.created_at || "—")}</div>
           `;
 
-          textContent.textContent = (data.texte_ocr || "").trim() || "⚠️ Aucun texte enregistré.";
+          const parsed = data.donnees_brutes || null;
+          const highlights = buildHighlightsFromParsed(parsed);
+
+          renderHighlightsBox(data, highlights);
+
+          const rawText = (data.texte_ocr || "").trim();
+          textContent.innerHTML = highlightText(rawText, highlights);
+
           textModal.style.display = "flex";
         } catch (e) {
           setMsg("err", "Erreur lecture texte: " + (e?.message || e));
@@ -544,7 +770,7 @@
       width:min(980px, 95vw); max-height:85vh; background:#fff; border-radius:14px;
       border:1px solid #e5e5e5; overflow:hidden; display:flex; flex-direction:column;">
       <div style="display:flex; align-items:center; justify-content:space-between; padding:12px 14px; border-bottom:1px solid #eee;">
-        <strong>🧾 Texte extrait</strong>
+        <strong>🧾 Texte extrait + surlignage</strong>
         <div style="display:flex; gap:8px;">
           <button class="btn" id="copyTextBtn">📋 Copier</button>
           <button class="btn" id="closeTextBtn">✖ Fermer</button>
@@ -552,10 +778,15 @@
       </div>
       <div style="padding:12px 14px; overflow:auto;">
         <div class="muted" id="textMeta" style="margin-bottom:10px;"></div>
-        <pre id="textContent" style="
+
+        <!-- ✅ Résumé champs extraits -->
+        <div id="hlBox" class="hlBox"></div>
+
+        <!-- ✅ Texte (HTML) -->
+        <div id="textContent" style="
           white-space:pre-wrap; word-break:break-word;
           background:#fafafa; border:1px solid #eee; border-radius:12px;
-          padding:12px; font-size:13px; line-height:1.35;"></pre>
+          padding:12px; font-size:13px; line-height:1.35;"></div>
       </div>
     </div>
   </div>
