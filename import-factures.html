@@ -103,12 +103,31 @@
 
     const state = { files: [] };
 
-    // ✅ On récupère le client Supabase initialisé par ton supabase-config.js
-    function getSupabaseClient() {
-      if (window.SupabaseClient) return window.SupabaseClient;
-      throw new Error("SupabaseClient introuvable. Vérifie que supabase-config.js initialise bien window.SupabaseClient.");
+  // Attendre que Supabase soit prêt
+async function waitForSupabase() {
+  for (let i = 0; i < 50; i++) { // max 5 secondes
+    if (window.SupabaseClient) {
+      return window.SupabaseClient;
     }
-    const sb = getSupabaseClient();
+    await new Promise(r => setTimeout(r, 100));
+  }
+  throw new Error("SupabaseClient non initialisé après attente");
+}
+
+// Initialisation différée
+let sb;
+(async () => {
+  try {
+    sb = await waitForSupabase();
+    console.log("✅ SupabaseClient prêt");
+    initApp();
+  } catch (e) {
+    console.error(e.message);
+    alert("Supabase ne s'est pas initialisé. Recharge la page.");
+  }
+})();
+function initApp() {
+
 
     const dropZone = document.getElementById("dropZone");
     const fileInput = document.getElementById("fileInput");
@@ -277,3 +296,5 @@
   </script>
 </body>
 </html>
+}
+
