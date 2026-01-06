@@ -4,9 +4,10 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Import Factures</title>
+
   <style>
     body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 0; background:#fafafa; }
-    header { display:flex; align-items:center; justify-content:space-between; padding:14px 18px; background:#fff; border-bottom:1px solid #e5e5e5; position:sticky; top:0; z-index:100; }
+    header { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:14px 18px; background:#fff; border-bottom:1px solid #e5e5e5; position:sticky; top:0; z-index:100; flex-wrap:wrap; }
     .btn { cursor:pointer; border:1px solid #ddd; background:#fff; padding:10px 12px; border-radius:10px; }
     .btn:disabled { opacity:.5; cursor:not-allowed; }
     main { max-width: 980px; margin: 18px auto; padding: 0 14px; }
@@ -23,8 +24,14 @@
     .row-actions { display:flex; gap:8px; flex-wrap:wrap; }
     .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size:12px; }
     .notice { background:#fff7d6; border:1px solid #f1d88a; padding:10px 12px; border-radius:12px; margin-bottom:14px; }
-    input[type="file"] { max-width: 100%; }
     .small { font-size:12px; }
+    input[type="file"] { max-width: 100%; }
+    .field { border:1px solid #ddd; border-radius:10px; padding:10px 12px; background:#fff; }
+    .authBox { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+    .msg { padding:10px 12px; border-radius:12px; border:1px solid #e5e5e5; background:#fff; }
+    .msg.ok { border-color:#9ad39a; background:#f2fff2; }
+    .msg.err { border-color:#ffb3b3; background:#fff2f2; }
+    .msg.warn { border-color:#f1d88a; background:#fff7d6; }
   </style>
 
   <!-- ✅ PDF.js (extraction texte pour PDF numériques) -->
@@ -34,11 +41,16 @@
 <body>
   <header>
     <div style="display:flex; align-items:center; gap:10px;">
-      <button class="btn" id="backBtn">⬅️ Retour Grille</button>
-      <strong>📤 Import Factures (V1 → extraction texte)</strong>
+      <button class="btn" id="backBtn">⬅️ Retour</button>
+      <strong>📤 Import Factures (Upload + Extraction auto)</strong>
     </div>
-    <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+
+    <div class="authBox">
       <span class="muted" id="authStatus">Connexion…</span>
+
+      <!-- Login inline (sans prompt) -->
+      <input class="field" id="emailInput" type="email" placeholder="Email" style="min-width:220px;">
+      <input class="field" id="passInput" type="password" placeholder="Mot de passe" style="min-width:160px;">
       <button class="btn" id="loginBtn">Se connecter</button>
       <button class="btn" id="logoutBtn" disabled>Se déconnecter</button>
     </div>
@@ -47,13 +59,12 @@
   <main>
     <div class="notice">
       <div><strong>Important :</strong> bucket <span class="mono">factures</span> = <strong>privé</strong> → il faut être connecté pour uploader.</div>
-      <div class="muted">
-        V1 = Upload + insertion <span class="mono">factures (pending)</span> + extraction texte PDF (statut <span class="mono">extracted</span>).
-      </div>
-      <div class="muted small" style="margin-top:6px;">
-        ⚠️ Si un jour tu as des PDF “scans”, on ajoutera un fallback OCR (Tesseract).
-      </div>
+      <div class="muted">Après upload : extraction texte PDF automatique → DB (<span class="mono">factures.texte_ocr</span>) + statut <span class="mono">extracted</span>.</div>
+      <div class="muted small" style="margin-top:6px;">⚠️ Si un PDF est un scan (image), l’extraction native sera vide → on ajoutera un fallback OCR plus tard.</div>
     </div>
+
+    <!-- Zone message globale (sans popup) -->
+    <div id="globalMsg" class="msg warn" style="display:none; margin-bottom:14px;"></div>
 
     <div class="card">
       <div class="drop" id="dropZone">
@@ -64,7 +75,7 @@
         </div>
       </div>
       <div style="margin-top:12px; display:flex; gap:10px; flex-wrap:wrap;">
-        <button class="btn" id="startUploadBtn" disabled>🚀 Uploader</button>
+        <button class="btn" id="startUploadBtn" disabled>🚀 Uploader & Extraire</button>
         <button class="btn" id="clearBtn" disabled>🧹 Vider la liste</button>
       </div>
     </div>
@@ -93,8 +104,7 @@
       </div>
 
       <p class="muted" style="margin-top:10px;">
-        <span class="mono">📄 Extraire texte</span> = extraction native PDF (pas OCR). 
-        <span class="mono">👁 Voir texte</span> affiche le texte enregistré dans Supabase.
+        Le bouton <span class="mono">👁 Voir texte</span> affiche le texte enregistré dans Supabase (champ <span class="mono">texte_ocr</span>).
       </p>
     </div>
   </main>
@@ -116,24 +126,27 @@
       if (kb < 1024) return kb.toFixed(1) + " KB";
       return (kb / 1024).toFixed(1) + " MB";
     }
-
     function isPdf(file) {
       return file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
     }
-
     function sanitizeFilename(name) {
       return name.replace(/[^a-zA-Z0-9.\-_]/g, "_").replace(/_{2,}/g, "_");
+    }
+
+    function setMsg(type, text) {
+      const box = document.getElementById("globalMsg");
+      box.className = "msg " + (type || "warn");
+      box.textContent = text || "";
+      box.style.display = text ? "block" : "none";
     }
 
     // -----------------------------
     // State
     // -----------------------------
-    const state = {
-      files: [] // { file, status, error, factureId, uploadPath }
-    };
+    const state = { files: [] }; // { file, status, error, factureId, uploadPath }
 
     // -----------------------------
-    // UI elements
+    // UI
     // -----------------------------
     const dropZone = document.getElementById("dropZone");
     const fileInput = document.getElementById("fileInput");
@@ -145,33 +158,33 @@
     const authStatus = document.getElementById("authStatus");
     const loginBtn = document.getElementById("loginBtn");
     const logoutBtn = document.getElementById("logoutBtn");
+    const emailInput = document.getElementById("emailInput");
+    const passInput = document.getElementById("passInput");
 
     document.getElementById("backBtn").onclick = () => {
-      window.location.href = "index.html"; // adapte si ta grille a un autre nom
+      // adapte si besoin
+      window.location.href = "index.html";
     };
 
     // -----------------------------
-    // Wait Supabase client (GitHub Pages timing)
+    // Wait Supabase
     // -----------------------------
     async function waitForSupabaseClient() {
-      for (let i = 0; i < 60; i++) { // ~6s
+      for (let i = 0; i < 60; i++) {
         if (window.SupabaseClient) return window.SupabaseClient;
         await new Promise(r => setTimeout(r, 100));
       }
       throw new Error("SupabaseClient non initialisé (timeout)");
     }
 
-    let sb; // Supabase client
+    let sb;
 
-    // -----------------------------
     // Init app when Supabase ready
-    // -----------------------------
     (async () => {
       try {
         sb = await waitForSupabaseClient();
-        console.log("✅ SupabaseClient prêt (import-factures)");
 
-        // PDF.js worker (recommandé)
+        // PDF.js worker
         if (window.pdfjsLib?.GlobalWorkerOptions) {
           window.pdfjsLib.GlobalWorkerOptions.workerSrc =
             "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
@@ -180,40 +193,60 @@
         initApp();
       } catch (e) {
         console.error(e);
-        alert("Supabase non initialisé. Recharge la page.");
+        setMsg("err", "Supabase non initialisé. Recharge la page.");
       }
     })();
 
     // -----------------------------
-    // App logic
+    // App
     // -----------------------------
     function initApp() {
 
-      // Auth status
+      // Auth
       async function refreshAuthStatus() {
         const { data: { user } } = await sb.auth.getUser();
         if (user) {
           authStatus.textContent = "Connecté: " + (user.email || user.id);
           logoutBtn.disabled = false;
+
+          // hide login fields when connected
+          emailInput.style.display = "none";
+          passInput.style.display = "none";
+          loginBtn.style.display = "none";
+          setMsg("", "");
         } else {
           authStatus.textContent = "Non connecté";
           logoutBtn.disabled = true;
+
+          emailInput.style.display = "";
+          passInput.style.display = "";
+          loginBtn.style.display = "";
+          setMsg("warn", "Connecte-toi pour uploader dans le bucket privé.");
         }
         render();
       }
 
       loginBtn.onclick = async () => {
-        const email = prompt("Email Supabase :");
-        if (!email) return;
-        const password = prompt("Mot de passe :");
-        if (!password) return;
+        try {
+          const email = (emailInput.value || "").trim();
+          const password = passInput.value || "";
+          if (!email || !password) {
+            setMsg("warn", "Email et mot de passe requis.");
+            return;
+          }
 
-        const { error } = await sb.auth.signInWithPassword({ email, password });
-        if (error) {
-          alert("Erreur login: " + error.message);
-          return;
+          setMsg("warn", "Connexion en cours…");
+          const { error } = await sb.auth.signInWithPassword({ email, password });
+          if (error) {
+            setMsg("err", "Erreur login: " + error.message);
+            return;
+          }
+          passInput.value = "";
+          await refreshAuthStatus();
+          setMsg("ok", "✅ Connecté.");
+        } catch (e) {
+          setMsg("err", "Erreur login: " + (e?.message || e));
         }
-        await refreshAuthStatus();
       };
 
       logoutBtn.onclick = async () => {
@@ -224,9 +257,13 @@
       sb.auth.onAuthStateChange(() => refreshAuthStatus());
       refreshAuthStatus();
 
-      // -----------------------------
+      async function ensureLoggedIn() {
+        const { data: { user } } = await sb.auth.getUser();
+        if (!user) throw new Error("Non connecté");
+        return user;
+      }
+
       // Render
-      // -----------------------------
       function render() {
         selectedCount.textContent = String(state.files.length);
 
@@ -257,14 +294,16 @@
 
           filesTbody.insertAdjacentHTML("beforeend", `
             <tr>
-              <td>${item.file.name}${item.error ? `<div class="muted">${item.error}</div>` : ""}</td>
+              <td>
+                ${item.file.name}
+                ${item.error ? `<div class="muted" style="color:#b00020;">${item.error}</div>` : ""}
+              </td>
               <td>${formatBytes(item.file.size)}</td>
               <td>${statusPill}</td>
               <td>${factureId}</td>
               <td>
                 <div class="row-actions">
                   <button class="btn" ${item.status==="uploading" ? "disabled" : ""} data-action="remove" data-index="${i}">Retirer</button>
-                  <button class="btn" ${item.status!=="uploaded" ? "disabled" : ""} data-action="extract" data-index="${i}">📄 Extraire texte</button>
                   <button class="btn" ${item.status!=="extracted" ? "disabled" : ""} data-action="viewText" data-index="${i}">👁 Voir texte</button>
                 </div>
               </td>
@@ -283,11 +322,6 @@
               return;
             }
 
-            if (action === "extract") {
-              await runTextExtractForIndex(idx);
-              return;
-            }
-
             if (action === "viewText") {
               await openTextViewer(idx);
               return;
@@ -296,30 +330,19 @@
         });
       }
 
-      // -----------------------------
       // Add files
-      // -----------------------------
       function addFiles(fileList) {
         const incoming = Array.from(fileList);
         for (const file of incoming) {
           if (state.files.length >= MAX_FILES) break;
-
-          if (!isPdf(file)) {
-            state.files.push({ file, status: "error", error: "Format non supporté (PDF uniquement)" });
-            continue;
-          }
-          if (file.size > MAX_SIZE) {
-            state.files.push({ file, status: "error", error: "Fichier trop volumineux (max 10 MB)" });
-            continue;
-          }
-
-          state.files.push({ file, status: "ready", error: null, factureId: null, uploadPath: null });
+          if (!isPdf(file)) { state.files.push({ file, status:"error", error:"PDF uniquement" }); continue; }
+          if (file.size > MAX_SIZE) { state.files.push({ file, status:"error", error:"Max 10MB" }); continue; }
+          state.files.push({ file, status:"ready", error:null, factureId:null, uploadPath:null });
         }
         render();
       }
 
       fileInput.addEventListener("change", (e) => addFiles(e.target.files));
-
       dropZone.addEventListener("dragover", (e) => { e.preventDefault(); dropZone.classList.add("drag"); });
       dropZone.addEventListener("dragleave", () => dropZone.classList.remove("drag"));
       dropZone.addEventListener("drop", (e) => {
@@ -330,19 +353,8 @@
 
       clearBtn.onclick = () => { state.files = []; render(); };
 
-      // -----------------------------
-      // Auth required for private bucket
-      // -----------------------------
-      async function ensureLoggedIn() {
-        const { data: { user } } = await sb.auth.getUser();
-        if (!user) throw new Error("Non connecté. Clique sur 'Se connecter' d'abord.");
-        return user;
-      }
-
-      // -----------------------------
-      // Upload one
-      // -----------------------------
-      async function uploadOne(item) {
+      // Upload + auto extract
+      async function uploadAndExtractOne(item) {
         item.status = "uploading";
         item.error = null;
         render();
@@ -350,6 +362,7 @@
         try {
           await ensureLoggedIn();
 
+          // 1) Upload storage
           const year = new Date().getFullYear();
           const ts = Date.now();
           const filename = `${ts}_${sanitizeFilename(item.file.name)}`;
@@ -358,24 +371,16 @@
           const { data: up, error: upErr } = await sb
             .storage
             .from("factures")
-            .upload(path, item.file, {
-              upsert: false,
-              cacheControl: "3600",
-              contentType: "application/pdf"
-            });
+            .upload(path, item.file, { upsert:false, cacheControl:"3600", contentType:"application/pdf" });
 
           if (upErr) throw upErr;
 
           item.uploadPath = up.path;
 
+          // 2) Insert DB row
           const { data: inserted, error: dbErr } = await sb
             .from("factures")
-            .insert({
-              fichier_url: up.path,
-              fichier_nom: item.file.name,
-              statut: "pending",
-              format_facture: "moderne"
-            })
+            .insert({ fichier_url: up.path, fichier_nom: item.file.name, statut:"pending", format_facture:"moderne" })
             .select("id")
             .single();
 
@@ -385,6 +390,9 @@
           item.status = "uploaded";
           render();
 
+          // 3) Auto extraction
+          await extractTextForItem(item);
+
         } catch (err) {
           item.status = "error";
           item.error = err?.message || String(err);
@@ -392,26 +400,13 @@
         }
       }
 
-      startUploadBtn.onclick = async () => {
-        const toUpload = state.files.filter(f => f.status === "ready");
-        for (const item of toUpload) await uploadOne(item);
-      };
-
-      // -----------------------------
-      // ✅ Extraction texte (PDF numérique)
-      // -----------------------------
-      async function runTextExtractForIndex(idx) {
-        const item = state.files[idx];
-        if (!item?.factureId || !item?.uploadPath) {
-          alert("Facture non uploadée / ID manquant");
-          return;
-        }
+      // Extraction texte (PDF numérique) - no popup
+      async function extractTextForItem(item) {
+        item.status = "extracting";
+        item.error = null;
+        render();
 
         try {
-          item.status = "extracting";
-          item.error = null;
-          render();
-
           await ensureLoggedIn();
 
           const { data: signed, error: signErr } = await sb
@@ -422,7 +417,7 @@
           if (signErr) throw signErr;
 
           const res = await fetch(signed.signedUrl);
-          if (!res.ok) throw new Error("Impossible de télécharger le PDF (signed URL)");
+          if (!res.ok) throw new Error("Téléchargement PDF impossible (signed URL)");
           const arrayBuffer = await res.arrayBuffer();
 
           const loadingTask = window.pdfjsLib.getDocument({ data: arrayBuffer });
@@ -438,36 +433,57 @@
 
           fullText = fullText.trim();
           if (fullText.length < 30) {
-            throw new Error("Texte extrait vide/trop court. (PDF scan ?)");
+            throw new Error("Texte extrait vide/trop court (PDF scan ?)");
           }
 
-          const { error: dbErr } = await sb
+          const { error: updErr } = await sb
             .from("factures")
             .update({ texte_ocr: fullText, statut: "extracted" })
             .eq("id", item.factureId);
 
-          if (dbErr) throw dbErr;
+          if (updErr) throw updErr;
 
           item.status = "extracted";
           render();
-          alert("✅ Texte extrait et sauvegardé !");
+
         } catch (err) {
           item.status = "error";
           item.error = err?.message || String(err);
           render();
 
+          // log DB error (silent)
           if (item.factureId) {
-            await sb
-              .from("factures")
-              .update({ statut: "error", error_message: item.error })
+            await sb.from("factures")
+              .update({ statut:"error", error_message:item.error })
               .eq("id", item.factureId);
           }
         }
       }
 
-      // -----------------------------
-      // ✅ Viewer (modale) du texte extrait
-      // -----------------------------
+      startUploadBtn.onclick = async () => {
+        try {
+          await ensureLoggedIn();
+        } catch {
+          setMsg("warn", "Connecte-toi d’abord pour uploader.");
+          return;
+        }
+
+        setMsg("warn", "Traitement en cours : upload + extraction automatique…");
+        const toProcess = state.files.filter(f => f.status === "ready");
+
+        for (const item of toProcess) {
+          await uploadAndExtractOne(item);
+        }
+
+        // message final
+        const okCount = state.files.filter(f => f.status === "extracted").length;
+        const errCount = state.files.filter(f => f.status === "error").length;
+
+        if (errCount === 0) setMsg("ok", `✅ Terminé : ${okCount} facture(s) uploadée(s) + texte extrait.`);
+        else setMsg("err", `⚠️ Terminé : ${okCount} OK, ${errCount} en erreur (voir la colonne fichier).`);
+      };
+
+      // Viewer (modale)
       const textModal = document.getElementById("textModal");
       const closeTextBtn = document.getElementById("closeTextBtn");
       const copyTextBtn = document.getElementById("copyTextBtn");
@@ -483,21 +499,19 @@
           copyTextBtn.textContent = "✅ Copié";
           setTimeout(() => (copyTextBtn.textContent = "📋 Copier"), 900);
         } catch {
-          alert("Copie impossible (permission navigateur).");
+          setMsg("warn", "Copie impossible (permission navigateur).");
         }
       };
 
       async function openTextViewer(idx) {
         const item = state.files[idx];
-        if (!item?.factureId) {
-          alert("Facture ID manquant");
-          return;
-        }
+        if (!item?.factureId) return;
 
         try {
+          // ✅ FIX: pas de updated_at (colonne inexistante)
           const { data, error } = await sb
             .from("factures")
-            .select("id,fichier_nom,statut,texte_ocr,updated_at,created_at")
+            .select("id,fichier_nom,statut,texte_ocr,created_at")
             .eq("id", item.factureId)
             .single();
 
@@ -507,13 +521,13 @@
             <div><strong>Facture ID :</strong> <span class="mono">${data.id}</span></div>
             <div><strong>Fichier :</strong> ${data.fichier_nom || "—"}</div>
             <div><strong>Statut :</strong> <span class="mono">${data.statut || "—"}</span></div>
-            <div><strong>Dernière mise à jour :</strong> ${data.updated_at || data.created_at || "—"}</div>
+            <div><strong>Créé le :</strong> ${data.created_at || "—"}</div>
           `;
 
           textContent.textContent = (data.texte_ocr || "").trim() || "⚠️ Aucun texte enregistré.";
           textModal.style.display = "flex";
         } catch (e) {
-          alert("Erreur récupération texte: " + (e?.message || e));
+          setMsg("err", "Erreur lecture texte: " + (e?.message || e));
         }
       }
 
