@@ -20,7 +20,6 @@
     .ok { border-color:#9ad39a; }
     .err { border-color:#ffb3b3; }
     .muted { color:#666; font-size:13px; }
-    .row-actions { display:flex; gap:8px; flex-wrap:wrap; }
     .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size:12px; }
     .notice { background:#fff7d6; border:1px solid #f1d88a; padding:10px 12px; border-radius:12px; margin-bottom:14px; }
   </style>
@@ -71,7 +70,7 @@
               <th>Taille</th>
               <th>Statut</th>
               <th>Facture ID</th>
-              <th>Actions</th>
+              <th>Action</th>
             </tr>
           </thead>
           <tbody id="filesTbody">
@@ -82,7 +81,7 @@
     </div>
   </main>
 
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <!-- ✅ IMPORTANT : on charge uniquement ton config (qui charge déjà Supabase V4) -->
   <script src="./supabase-config.js"></script>
 
   <script>
@@ -95,28 +94,21 @@
       if (kb < 1024) return kb.toFixed(1) + " KB";
       return (kb / 1024).toFixed(1) + " MB";
     }
-
     function isPdf(file) {
       return file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
     }
-
     function sanitizeFilename(name) {
       return name.replace(/[^a-zA-Z0-9.\-_]/g, "_").replace(/_{2,}/g, "_");
     }
 
     const state = { files: [] };
 
-    const supabaseUrl = window.SUPABASE_URL;
-    const supabaseAnonKey = window.SUPABASE_ANON_KEY;
-
-    if (!supabaseUrl || !supabaseAnonKey) {
-      alert("Supabase config manquante. Vérifie supabase-config.js");
-      throw new Error("Supabase config missing");
+    // ✅ On récupère le client Supabase initialisé par ton supabase-config.js
+    function getSupabaseClient() {
+      if (window.SupabaseClient) return window.SupabaseClient;
+      throw new Error("SupabaseClient introuvable. Vérifie que supabase-config.js initialise bien window.SupabaseClient.");
     }
-
-    const supabase = (window.SupabaseClient)
-      ? window.SupabaseClient
-      : window.supabase.createClient(supabaseUrl, supabaseAnonKey);
+    const sb = getSupabaseClient();
 
     const dropZone = document.getElementById("dropZone");
     const fileInput = document.getElementById("fileInput");
@@ -134,7 +126,7 @@
     };
 
     async function refreshAuthStatus() {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { user } } = await sb.auth.getUser();
       if (user) {
         authStatus.textContent = "Connecté: " + (user.email || user.id);
         logoutBtn.disabled = false;
@@ -151,7 +143,7 @@
       const password = prompt("Mot de passe :");
       if (!password) return;
 
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      const { error } = await sb.auth.signInWithPassword({ email, password });
       if (error) {
         alert("Erreur login: " + error.message);
         return;
@@ -160,12 +152,12 @@
     };
 
     logoutBtn.onclick = async () => {
-      await supabase.auth.signOut();
+      await sb.auth.signOut();
       await refreshAuthStatus();
     };
 
+    sb.auth.onAuthStateChange(() => refreshAuthStatus());
     refreshAuthStatus();
-    supabase.auth.onAuthStateChange(() => refreshAuthStatus());
 
     function render() {
       selectedCount.textContent = String(state.files.length);
@@ -189,6 +181,7 @@
           return `<span class="pill">${item.status}</span>`;
         })();
         const factureId = item.factureId ? `<span class="mono">${item.factureId}</span>` : `<span class="muted">—</span>`;
+
         filesTbody.insertAdjacentHTML("beforeend", `
           <tr>
             <td>${item.file.name}${item.error ? `<div class="muted">${item.error}</div>` : ""}</td>
@@ -231,7 +224,7 @@
     clearBtn.onclick = () => { state.files = []; render(); };
 
     async function ensureLoggedIn() {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { user } } = await sb.auth.getUser();
       if (!user) throw new Error("Non connecté. Clique sur 'Se connecter' d'abord.");
       return user;
     }
@@ -249,7 +242,7 @@
         const filename = `${ts}_${sanitizeFilename(item.file.name)}`;
         const path = `${year}/${filename}`;
 
-        const { data: up, error: upErr } = await supabase
+        const { data: up, error: upErr } = await sb
           .storage.from("factures")
           .upload(path, item.file, { upsert:false, cacheControl:"3600", contentType:"application/pdf" });
 
@@ -257,7 +250,7 @@
 
         item.uploadPath = up.path;
 
-        const { data: inserted, error: dbErr } = await supabase
+        const { data: inserted, error: dbErr } = await sb
           .from("factures")
           .insert({ fichier_url: up.path, fichier_nom: item.file.name, statut:"pending", format_facture:"autre" })
           .select("id").single();
