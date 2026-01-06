@@ -20,15 +20,21 @@
     .ok { border-color:#9ad39a; }
     .err { border-color:#ffb3b3; }
     .muted { color:#666; font-size:13px; }
+    .row-actions { display:flex; gap:8px; flex-wrap:wrap; }
     .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size:12px; }
     .notice { background:#fff7d6; border:1px solid #f1d88a; padding:10px 12px; border-radius:12px; margin-bottom:14px; }
+    input[type="file"] { max-width: 100%; }
   </style>
+
+  <!-- ✅ PDF.js (extraction texte pour PDF numériques) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 </head>
+
 <body>
   <header>
     <div style="display:flex; align-items:center; gap:10px;">
       <button class="btn" id="backBtn">⬅️ Retour Grille</button>
-      <strong>📤 Import Factures (V1)</strong>
+      <strong>📤 Import Factures (V1 → extraction texte)</strong>
     </div>
     <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
       <span class="muted" id="authStatus">Connexion…</span>
@@ -40,7 +46,9 @@
   <main>
     <div class="notice">
       <div><strong>Important :</strong> bucket <span class="mono">factures</span> = <strong>privé</strong> → il faut être connecté pour uploader.</div>
-      <div class="muted">V1 = Upload + création en base (<span class="mono">factures.statut = pending</span>). OCR/Extraction arrive Sprint 1.</div>
+      <div class="muted">
+        V1 = Upload + insertion <span class="mono">factures (pending)</span> + extraction texte PDF (statut <span class="mono">extracted</span>).
+      </div>
     </div>
 
     <div class="card">
@@ -70,7 +78,7 @@
               <th>Taille</th>
               <th>Statut</th>
               <th>Facture ID</th>
-              <th>Action</th>
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody id="filesTbody">
@@ -78,19 +86,20 @@
           </tbody>
         </table>
       </div>
+      <p class="muted" style="margin-top:10px;">
+        Bouton <span class="mono">📄 Extraire texte</span> = extraction native PDF (pas OCR). Si un jour tu as des scans, on ajoutera un fallback OCR.
+      </p>
     </div>
   </main>
-  
-<script src="./supabase-core.js"></script>
-<script src="./supabase-services.js"></script>
 
-
-<script>
-  console.log("window.supabase =", window.supabase);
-</script>
-
+  <!-- ✅ Option 2 stable : core + services (un seul client Supabase) -->
+  <script src="./supabase-core.js"></script>
+  <script src="./supabase-services.js"></script>
 
   <script>
+    // -----------------------------
+    // Helpers
+    // -----------------------------
     const MAX_FILES = 20;
     const MAX_SIZE = 10 * 1024 * 1024;
 
@@ -100,41 +109,25 @@
       if (kb < 1024) return kb.toFixed(1) + " KB";
       return (kb / 1024).toFixed(1) + " MB";
     }
+
     function isPdf(file) {
       return file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
     }
+
     function sanitizeFilename(name) {
       return name.replace(/[^a-zA-Z0-9.\-_]/g, "_").replace(/_{2,}/g, "_");
     }
 
-    const state = { files: [] };
+    // -----------------------------
+    // State
+    // -----------------------------
+    const state = {
+      files: [] // { file, status, error, factureId, uploadPath }
+    };
 
-  // Attendre que Supabase soit prêt
-async function waitForSupabase() {
-  for (let i = 0; i < 50; i++) { // max 5 secondes
-    if (window.SupabaseClient) {
-      return window.SupabaseClient;
-    }
-    await new Promise(r => setTimeout(r, 100));
-  }
-  throw new Error("SupabaseClient non initialisé après attente");
-}
-
-// Initialisation différée
-let sb;
-(async () => {
-  try {
-    sb = await waitForSupabase();
-    console.log("✅ SupabaseClient prêt");
-    initApp();
-  } catch (e) {
-    console.error(e.message);
-    alert("Supabase ne s'est pas initialisé. Recharge la page.");
-  }
-})();
-function initApp() {
-
-
+    // -----------------------------
+    // UI elements
+    // -----------------------------
     const dropZone = document.getElementById("dropZone");
     const fileInput = document.getElementById("fileInput");
     const startUploadBtn = document.getElementById("startUploadBtn");
@@ -147,166 +140,326 @@ function initApp() {
     const logoutBtn = document.getElementById("logoutBtn");
 
     document.getElementById("backBtn").onclick = () => {
-      window.location.href = "grille_v11_0_24_FINAL.html";
+      window.location.href = "index.html"; // adapte si ta grille a un autre nom
     };
 
-    async function refreshAuthStatus() {
-      const { data: { user } } = await sb.auth.getUser();
-      if (user) {
-        authStatus.textContent = "Connecté: " + (user.email || user.id);
-        logoutBtn.disabled = false;
-      } else {
-        authStatus.textContent = "Non connecté";
-        logoutBtn.disabled = true;
+    // -----------------------------
+    // Wait Supabase client (GitHub Pages timing)
+    // -----------------------------
+    async function waitForSupabaseClient() {
+      for (let i = 0; i < 60; i++) { // ~6s
+        if (window.SupabaseClient) return window.SupabaseClient;
+        await new Promise(r => setTimeout(r, 100));
       }
-      render();
+      throw new Error("SupabaseClient non initialisé (timeout)");
     }
 
-    loginBtn.onclick = async () => {
-      const email = prompt("Email Supabase :");
-      if (!email) return;
-      const password = prompt("Mot de passe :");
-      if (!password) return;
+    let sb; // Supabase client
 
-      const { error } = await sb.auth.signInWithPassword({ email, password });
-      if (error) {
-        alert("Erreur login: " + error.message);
-        return;
-      }
-      await refreshAuthStatus();
-    };
-
-    logoutBtn.onclick = async () => {
-      await sb.auth.signOut();
-      await refreshAuthStatus();
-    };
-
-    sb.auth.onAuthStateChange(() => refreshAuthStatus());
-    refreshAuthStatus();
-
-    function render() {
-      selectedCount.textContent = String(state.files.length);
-      const anyUploading = state.files.some(f => f.status === "uploading");
-      startUploadBtn.disabled = state.files.length === 0 || anyUploading;
-      clearBtn.disabled = state.files.length === 0 || anyUploading;
-
-      filesTbody.innerHTML = "";
-      if (state.files.length === 0) {
-        filesTbody.innerHTML = `<tr><td colspan="5" class="muted">Aucun fichier</td></tr>`;
-        return;
-      }
-
-      for (let i = 0; i < state.files.length; i++) {
-        const item = state.files[i];
-        const statusPill = (() => {
-          if (item.status === "ready") return `<span class="pill">prêt</span>`;
-          if (item.status === "uploading") return `<span class="pill">upload…</span>`;
-          if (item.status === "uploaded") return `<span class="pill ok">uploadé</span>`;
-          if (item.status === "error") return `<span class="pill err">erreur</span>`;
-          return `<span class="pill">${item.status}</span>`;
-        })();
-        const factureId = item.factureId ? `<span class="mono">${item.factureId}</span>` : `<span class="muted">—</span>`;
-
-        filesTbody.insertAdjacentHTML("beforeend", `
-          <tr>
-            <td>${item.file.name}${item.error ? `<div class="muted">${item.error}</div>` : ""}</td>
-            <td>${formatBytes(item.file.size)}</td>
-            <td>${statusPill}</td>
-            <td>${factureId}</td>
-            <td><button class="btn" ${item.status==="uploading"?"disabled":""} data-i="${i}">Retirer</button></td>
-          </tr>
-        `);
-      }
-
-      filesTbody.querySelectorAll("button[data-i]").forEach(btn => {
-        btn.onclick = () => {
-          const idx = Number(btn.getAttribute("data-i"));
-          state.files.splice(idx, 1);
-          render();
-        };
-      });
-    }
-
-    function addFiles(fileList) {
-      const incoming = Array.from(fileList);
-      for (const file of incoming) {
-        if (state.files.length >= MAX_FILES) break;
-        if (!isPdf(file)) { state.files.push({ file, status:"error", error:"PDF uniquement" }); continue; }
-        if (file.size > MAX_SIZE) { state.files.push({ file, status:"error", error:"Max 10MB" }); continue; }
-        state.files.push({ file, status:"ready", error:null, factureId:null, uploadPath:null });
-      }
-      render();
-    }
-
-    fileInput.addEventListener("change", (e) => addFiles(e.target.files));
-    dropZone.addEventListener("dragover", (e) => { e.preventDefault(); dropZone.classList.add("drag"); });
-    dropZone.addEventListener("dragleave", () => dropZone.classList.remove("drag"));
-    dropZone.addEventListener("drop", (e) => {
-      e.preventDefault(); dropZone.classList.remove("drag");
-      if (e.dataTransfer?.files) addFiles(e.dataTransfer.files);
-    });
-
-    clearBtn.onclick = () => { state.files = []; render(); };
-
-    async function ensureLoggedIn() {
-      const { data: { user } } = await sb.auth.getUser();
-      if (!user) throw new Error("Non connecté. Clique sur 'Se connecter' d'abord.");
-      return user;
-    }
-
-    async function uploadOne(item) {
-      item.status = "uploading";
-      item.error = null;
-      render();
-
+    // -----------------------------
+    // Init app when Supabase ready
+    // -----------------------------
+    (async () => {
       try {
-        await ensureLoggedIn();
+        sb = await waitForSupabaseClient();
+        console.log("✅ SupabaseClient prêt (import-factures)");
 
-        const year = new Date().getFullYear();
-        const ts = Date.now();
-        const filename = `${ts}_${sanitizeFilename(item.file.name)}`;
-        const path = `${year}/${filename}`;
+        // PDF.js worker (recommandé pour éviter warnings)
+        if (window.pdfjsLib?.GlobalWorkerOptions) {
+          window.pdfjsLib.GlobalWorkerOptions.workerSrc =
+            "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+        }
 
-        const { data: up, error: upErr } = await sb
-          .storage.from("factures")
-          .upload(path, item.file, { upsert:false, cacheControl:"3600", contentType:"application/pdf" });
+        initApp();
+      } catch (e) {
+        console.error(e);
+        alert("Supabase non initialisé. Recharge la page.");
+      }
+    })();
 
-        if (upErr) throw upErr;
+    // -----------------------------
+    // App logic
+    // -----------------------------
+    function initApp() {
 
-        item.uploadPath = up.path;
-
-        const { data: inserted, error: dbErr } = await sb
-          .from("factures")
-          .insert({ fichier_url: up.path, fichier_nom: item.file.name, statut:"pending", format_facture:"autre" })
-          .select("id").single();
-
-        if (dbErr) throw dbErr;
-
-        item.factureId = inserted.id;
-        item.status = "uploaded";
-        render();
-
-      } catch (err) {
-        item.status = "error";
-        item.error = err?.message || String(err);
+      // Auth status
+      async function refreshAuthStatus() {
+        const { data: { user } } = await sb.auth.getUser();
+        if (user) {
+          authStatus.textContent = "Connecté: " + (user.email || user.id);
+          logoutBtn.disabled = false;
+        } else {
+          authStatus.textContent = "Non connecté";
+          logoutBtn.disabled = true;
+        }
         render();
       }
+
+      loginBtn.onclick = async () => {
+        const email = prompt("Email Supabase :");
+        if (!email) return;
+        const password = prompt("Mot de passe :");
+        if (!password) return;
+
+        const { error } = await sb.auth.signInWithPassword({ email, password });
+        if (error) {
+          alert("Erreur login: " + error.message);
+          return;
+        }
+        await refreshAuthStatus();
+      };
+
+      logoutBtn.onclick = async () => {
+        await sb.auth.signOut();
+        await refreshAuthStatus();
+      };
+
+      sb.auth.onAuthStateChange(() => refreshAuthStatus());
+      refreshAuthStatus();
+
+      // Render
+      function render() {
+        selectedCount.textContent = String(state.files.length);
+
+        const anyBusy = state.files.some(f => ["uploading","extracting"].includes(f.status));
+        startUploadBtn.disabled = state.files.length === 0 || anyBusy;
+        clearBtn.disabled = state.files.length === 0 || anyBusy;
+
+        filesTbody.innerHTML = "";
+        if (state.files.length === 0) {
+          filesTbody.innerHTML = `<tr><td colspan="5" class="muted">Aucun fichier</td></tr>`;
+          return;
+        }
+
+        for (let i = 0; i < state.files.length; i++) {
+          const item = state.files[i];
+
+          const statusPill = (() => {
+            if (item.status === "ready") return `<span class="pill">prêt</span>`;
+            if (item.status === "uploading") return `<span class="pill">upload…</span>`;
+            if (item.status === "uploaded") return `<span class="pill ok">uploadé</span>`;
+            if (item.status === "extracting") return `<span class="pill">extraction…</span>`;
+            if (item.status === "extracted") return `<span class="pill ok">extracted</span>`;
+            if (item.status === "error") return `<span class="pill err">erreur</span>`;
+            return `<span class="pill">${item.status}</span>`;
+          })();
+
+          const factureId = item.factureId ? `<span class="mono">${item.factureId}</span>` : `<span class="muted">—</span>`;
+
+          filesTbody.insertAdjacentHTML("beforeend", `
+            <tr>
+              <td>${item.file.name}${item.error ? `<div class="muted">${item.error}</div>` : ""}</td>
+              <td>${formatBytes(item.file.size)}</td>
+              <td>${statusPill}</td>
+              <td>${factureId}</td>
+              <td>
+                <div class="row-actions">
+                  <button class="btn" ${item.status==="uploading" ? "disabled" : ""} data-action="remove" data-index="${i}">Retirer</button>
+                  <button class="btn" ${item.status!=="uploaded" ? "disabled" : ""} data-action="extract" data-index="${i}">📄 Extraire texte</button>
+                </div>
+              </td>
+            </tr>
+          `);
+        }
+
+        filesTbody.querySelectorAll("button[data-action]").forEach(btn => {
+          btn.onclick = async () => {
+            const idx = Number(btn.getAttribute("data-index"));
+            const action = btn.getAttribute("data-action");
+
+            if (action === "remove") {
+              state.files.splice(idx, 1);
+              render();
+              return;
+            }
+
+            if (action === "extract") {
+              await runTextExtractForIndex(idx);
+              return;
+            }
+          };
+        });
+      }
+
+      // Add files
+      function addFiles(fileList) {
+        const incoming = Array.from(fileList);
+        for (const file of incoming) {
+          if (state.files.length >= MAX_FILES) break;
+
+          if (!isPdf(file)) {
+            state.files.push({ file, status: "error", error: "Format non supporté (PDF uniquement)" });
+            continue;
+          }
+          if (file.size > MAX_SIZE) {
+            state.files.push({ file, status: "error", error: "Fichier trop volumineux (max 10 MB)" });
+            continue;
+          }
+
+          state.files.push({ file, status: "ready", error: null, factureId: null, uploadPath: null });
+        }
+        render();
+      }
+
+      fileInput.addEventListener("change", (e) => addFiles(e.target.files));
+
+      // Drag & drop
+      dropZone.addEventListener("dragover", (e) => { e.preventDefault(); dropZone.classList.add("drag"); });
+      dropZone.addEventListener("dragleave", () => dropZone.classList.remove("drag"));
+      dropZone.addEventListener("drop", (e) => {
+        e.preventDefault();
+        dropZone.classList.remove("drag");
+        if (e.dataTransfer?.files) addFiles(e.dataTransfer.files);
+      });
+
+      clearBtn.onclick = () => { state.files = []; render(); };
+
+      // Require login for private bucket
+      async function ensureLoggedIn() {
+        const { data: { user } } = await sb.auth.getUser();
+        if (!user) throw new Error("Non connecté. Clique sur 'Se connecter' d'abord.");
+        return user;
+      }
+
+      // Upload one PDF -> Storage + DB row factures
+      async function uploadOne(item) {
+        item.status = "uploading";
+        item.error = null;
+        render();
+
+        try {
+          await ensureLoggedIn();
+
+          const year = new Date().getFullYear();
+          const ts = Date.now();
+          const filename = `${ts}_${sanitizeFilename(item.file.name)}`;
+          const path = `${year}/${filename}`;
+
+          const { data: up, error: upErr } = await sb
+            .storage
+            .from("factures")
+            .upload(path, item.file, {
+              upsert: false,
+              cacheControl: "3600",
+              contentType: "application/pdf"
+            });
+
+          if (upErr) throw upErr;
+
+          item.uploadPath = up.path;
+
+          const { data: inserted, error: dbErr } = await sb
+            .from("factures")
+            .insert({
+              fichier_url: up.path,
+              fichier_nom: item.file.name,
+              statut: "pending",
+              format_facture: "moderne"
+            })
+            .select("id")
+            .single();
+
+          if (dbErr) throw dbErr;
+
+          item.factureId = inserted.id;
+          item.status = "uploaded";
+          render();
+
+        } catch (err) {
+          item.status = "error";
+          item.error = err?.message || String(err);
+          render();
+        }
+      }
+
+      startUploadBtn.onclick = async () => {
+        const toUpload = state.files.filter(f => f.status === "ready");
+        for (const item of toUpload) {
+          await uploadOne(item);
+        }
+      };
+
+      // -----------------------------
+      // ✅ Extraction texte (PDF numérique)
+      // -----------------------------
+      async function runTextExtractForIndex(idx) {
+        const item = state.files[idx];
+        if (!item?.factureId || !item?.uploadPath) {
+          alert("Facture non uploadée / ID manquant");
+          return;
+        }
+
+        try {
+          item.status = "extracting";
+          item.error = null;
+          render();
+
+          await ensureLoggedIn();
+
+          // 1) Signed URL
+          const { data: signed, error: signErr } = await sb
+            .storage
+            .from("factures")
+            .createSignedUrl(item.uploadPath, 60 * 10); // 10 min
+
+          if (signErr) throw signErr;
+
+          // 2) Fetch PDF as ArrayBuffer
+          const res = await fetch(signed.signedUrl);
+          if (!res.ok) throw new Error("Impossible de télécharger le PDF (signed URL)");
+          const arrayBuffer = await res.arrayBuffer();
+
+          // 3) PDF.js load
+          const loadingTask = window.pdfjsLib.getDocument({ data: arrayBuffer });
+          const pdf = await loadingTask.promise;
+
+          let fullText = "";
+          for (let p = 1; p <= pdf.numPages; p++) {
+            const page = await pdf.getPage(p);
+            const content = await page.getTextContent();
+            const pageText = content.items.map(it => it.str).join(" ");
+            fullText += `\n\n=== PAGE ${p} ===\n` + pageText;
+          }
+
+          fullText = fullText.trim();
+          if (fullText.length < 30) {
+            throw new Error("Texte extrait vide/trop court. (PDF scan ?)");
+          }
+
+          // 4) Save in DB
+          const { error: dbErr } = await sb
+            .from("factures")
+            .update({
+              texte_ocr: fullText,   // champ existant, on y met le texte extrait
+              statut: "extracted"
+            })
+            .eq("id", item.factureId);
+
+          if (dbErr) throw dbErr;
+
+          item.status = "extracted";
+          render();
+          alert("✅ Texte extrait et sauvegardé !");
+        } catch (err) {
+          item.status = "error";
+          item.error = err?.message || String(err);
+          render();
+
+          if (item.factureId) {
+            await sb
+              .from("factures")
+              .update({ statut: "error", error_message: item.error })
+              .eq("id", item.factureId);
+          }
+        }
+      }
+
+      // expose render to refreshAuthStatus
+      window.__renderImportFactures = render;
+
+      // initial render
+      render();
     }
-
-    startUploadBtn.onclick = async () => {
-      const toUpload = state.files.filter(f => f.status === "ready");
-      for (const item of toUpload) await uploadOne(item);
-    };
-
-    render();
-  } 
   </script>
 </body>
 </html>
-
-
-
-
-
-
-
