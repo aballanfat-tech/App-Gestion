@@ -6,7 +6,7 @@
   <title>Import Factures</title>
   <style>
     body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 0; background:#fafafa; }
-    header { display:flex; align-items:center; justify-content:space-between; padding:14px 18px; background:#fff; border-bottom:1px solid #e5e5e5; position:sticky; top:0; }
+    header { display:flex; align-items:center; justify-content:space-between; padding:14px 18px; background:#fff; border-bottom:1px solid #e5e5e5; position:sticky; top:0; z-index:100; }
     .btn { cursor:pointer; border:1px solid #ddd; background:#fff; padding:10px 12px; border-radius:10px; }
     .btn:disabled { opacity:.5; cursor:not-allowed; }
     main { max-width: 980px; margin: 18px auto; padding: 0 14px; }
@@ -14,7 +14,7 @@
     .drop { border:2px dashed #bbb; border-radius:14px; padding:22px; text-align:center; background:#fcfcfc; }
     .drop.drag { border-color:#333; background:#fff; }
     table { width:100%; border-collapse: collapse; }
-    th, td { border-bottom:1px solid #eee; padding:10px 8px; text-align:left; font-size:14px; }
+    th, td { border-bottom:1px solid #eee; padding:10px 8px; text-align:left; font-size:14px; vertical-align:top; }
     th { font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:#666; }
     .pill { display:inline-block; padding:4px 8px; border-radius:999px; border:1px solid #ddd; font-size:12px; }
     .ok { border-color:#9ad39a; }
@@ -24,6 +24,7 @@
     .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size:12px; }
     .notice { background:#fff7d6; border:1px solid #f1d88a; padding:10px 12px; border-radius:12px; margin-bottom:14px; }
     input[type="file"] { max-width: 100%; }
+    .small { font-size:12px; }
   </style>
 
   <!-- ✅ PDF.js (extraction texte pour PDF numériques) -->
@@ -49,6 +50,9 @@
       <div class="muted">
         V1 = Upload + insertion <span class="mono">factures (pending)</span> + extraction texte PDF (statut <span class="mono">extracted</span>).
       </div>
+      <div class="muted small" style="margin-top:6px;">
+        ⚠️ Si un jour tu as des PDF “scans”, on ajoutera un fallback OCR (Tesseract).
+      </div>
     </div>
 
     <div class="card">
@@ -70,6 +74,7 @@
         <strong>📄 Fichiers sélectionnés</strong>
         <span class="muted" id="selectedCount">0</span>
       </div>
+
       <div style="overflow:auto; margin-top:10px;">
         <table>
           <thead>
@@ -86,13 +91,15 @@
           </tbody>
         </table>
       </div>
+
       <p class="muted" style="margin-top:10px;">
-        Bouton <span class="mono">📄 Extraire texte</span> = extraction native PDF (pas OCR). Si un jour tu as des scans, on ajoutera un fallback OCR.
+        <span class="mono">📄 Extraire texte</span> = extraction native PDF (pas OCR). 
+        <span class="mono">👁 Voir texte</span> affiche le texte enregistré dans Supabase.
       </p>
     </div>
   </main>
 
-  <!-- ✅ Option 2 stable : core + services (un seul client Supabase) -->
+  <!-- ✅ Option 2 stable : core + services -->
   <script src="./supabase-core.js"></script>
   <script src="./supabase-services.js"></script>
 
@@ -164,7 +171,7 @@
         sb = await waitForSupabaseClient();
         console.log("✅ SupabaseClient prêt (import-factures)");
 
-        // PDF.js worker (recommandé pour éviter warnings)
+        // PDF.js worker (recommandé)
         if (window.pdfjsLib?.GlobalWorkerOptions) {
           window.pdfjsLib.GlobalWorkerOptions.workerSrc =
             "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
@@ -217,7 +224,9 @@
       sb.auth.onAuthStateChange(() => refreshAuthStatus());
       refreshAuthStatus();
 
+      // -----------------------------
       // Render
+      // -----------------------------
       function render() {
         selectedCount.textContent = String(state.files.length);
 
@@ -256,6 +265,7 @@
                 <div class="row-actions">
                   <button class="btn" ${item.status==="uploading" ? "disabled" : ""} data-action="remove" data-index="${i}">Retirer</button>
                   <button class="btn" ${item.status!=="uploaded" ? "disabled" : ""} data-action="extract" data-index="${i}">📄 Extraire texte</button>
+                  <button class="btn" ${item.status!=="extracted" ? "disabled" : ""} data-action="viewText" data-index="${i}">👁 Voir texte</button>
                 </div>
               </td>
             </tr>
@@ -277,11 +287,18 @@
               await runTextExtractForIndex(idx);
               return;
             }
+
+            if (action === "viewText") {
+              await openTextViewer(idx);
+              return;
+            }
           };
         });
       }
 
+      // -----------------------------
       // Add files
+      // -----------------------------
       function addFiles(fileList) {
         const incoming = Array.from(fileList);
         for (const file of incoming) {
@@ -303,7 +320,6 @@
 
       fileInput.addEventListener("change", (e) => addFiles(e.target.files));
 
-      // Drag & drop
       dropZone.addEventListener("dragover", (e) => { e.preventDefault(); dropZone.classList.add("drag"); });
       dropZone.addEventListener("dragleave", () => dropZone.classList.remove("drag"));
       dropZone.addEventListener("drop", (e) => {
@@ -314,14 +330,18 @@
 
       clearBtn.onclick = () => { state.files = []; render(); };
 
-      // Require login for private bucket
+      // -----------------------------
+      // Auth required for private bucket
+      // -----------------------------
       async function ensureLoggedIn() {
         const { data: { user } } = await sb.auth.getUser();
         if (!user) throw new Error("Non connecté. Clique sur 'Se connecter' d'abord.");
         return user;
       }
 
-      // Upload one PDF -> Storage + DB row factures
+      // -----------------------------
+      // Upload one
+      // -----------------------------
       async function uploadOne(item) {
         item.status = "uploading";
         item.error = null;
@@ -374,9 +394,7 @@
 
       startUploadBtn.onclick = async () => {
         const toUpload = state.files.filter(f => f.status === "ready");
-        for (const item of toUpload) {
-          await uploadOne(item);
-        }
+        for (const item of toUpload) await uploadOne(item);
       };
 
       // -----------------------------
@@ -396,20 +414,17 @@
 
           await ensureLoggedIn();
 
-          // 1) Signed URL
           const { data: signed, error: signErr } = await sb
             .storage
             .from("factures")
-            .createSignedUrl(item.uploadPath, 60 * 10); // 10 min
+            .createSignedUrl(item.uploadPath, 60 * 10);
 
           if (signErr) throw signErr;
 
-          // 2) Fetch PDF as ArrayBuffer
           const res = await fetch(signed.signedUrl);
           if (!res.ok) throw new Error("Impossible de télécharger le PDF (signed URL)");
           const arrayBuffer = await res.arrayBuffer();
 
-          // 3) PDF.js load
           const loadingTask = window.pdfjsLib.getDocument({ data: arrayBuffer });
           const pdf = await loadingTask.promise;
 
@@ -426,13 +441,9 @@
             throw new Error("Texte extrait vide/trop court. (PDF scan ?)");
           }
 
-          // 4) Save in DB
           const { error: dbErr } = await sb
             .from("factures")
-            .update({
-              texte_ocr: fullText,   // champ existant, on y met le texte extrait
-              statut: "extracted"
-            })
+            .update({ texte_ocr: fullText, statut: "extracted" })
             .eq("id", item.factureId);
 
           if (dbErr) throw dbErr;
@@ -454,12 +465,85 @@
         }
       }
 
-      // expose render to refreshAuthStatus
-      window.__renderImportFactures = render;
+      // -----------------------------
+      // ✅ Viewer (modale) du texte extrait
+      // -----------------------------
+      const textModal = document.getElementById("textModal");
+      const closeTextBtn = document.getElementById("closeTextBtn");
+      const copyTextBtn = document.getElementById("copyTextBtn");
+      const textContent = document.getElementById("textContent");
+      const textMeta = document.getElementById("textMeta");
 
-      // initial render
+      closeTextBtn.onclick = () => { textModal.style.display = "none"; };
+      textModal.addEventListener("click", (e) => { if (e.target === textModal) textModal.style.display = "none"; });
+
+      copyTextBtn.onclick = async () => {
+        try {
+          await navigator.clipboard.writeText(textContent.textContent || "");
+          copyTextBtn.textContent = "✅ Copié";
+          setTimeout(() => (copyTextBtn.textContent = "📋 Copier"), 900);
+        } catch {
+          alert("Copie impossible (permission navigateur).");
+        }
+      };
+
+      async function openTextViewer(idx) {
+        const item = state.files[idx];
+        if (!item?.factureId) {
+          alert("Facture ID manquant");
+          return;
+        }
+
+        try {
+          const { data, error } = await sb
+            .from("factures")
+            .select("id,fichier_nom,statut,texte_ocr,updated_at,created_at")
+            .eq("id", item.factureId)
+            .single();
+
+          if (error) throw error;
+
+          textMeta.innerHTML = `
+            <div><strong>Facture ID :</strong> <span class="mono">${data.id}</span></div>
+            <div><strong>Fichier :</strong> ${data.fichier_nom || "—"}</div>
+            <div><strong>Statut :</strong> <span class="mono">${data.statut || "—"}</span></div>
+            <div><strong>Dernière mise à jour :</strong> ${data.updated_at || data.created_at || "—"}</div>
+          `;
+
+          textContent.textContent = (data.texte_ocr || "").trim() || "⚠️ Aucun texte enregistré.";
+          textModal.style.display = "flex";
+        } catch (e) {
+          alert("Erreur récupération texte: " + (e?.message || e));
+        }
+      }
+
+      // Initial render
       render();
     }
   </script>
+
+  <!-- ✅ MODALE : Viewer du texte extrait -->
+  <div id="textModal" style="
+    display:none; position:fixed; inset:0; background:rgba(0,0,0,.5);
+    align-items:center; justify-content:center; padding:18px; z-index:9999;">
+    <div style="
+      width:min(980px, 95vw); max-height:85vh; background:#fff; border-radius:14px;
+      border:1px solid #e5e5e5; overflow:hidden; display:flex; flex-direction:column;">
+      <div style="display:flex; align-items:center; justify-content:space-between; padding:12px 14px; border-bottom:1px solid #eee;">
+        <strong>🧾 Texte extrait</strong>
+        <div style="display:flex; gap:8px;">
+          <button class="btn" id="copyTextBtn">📋 Copier</button>
+          <button class="btn" id="closeTextBtn">✖ Fermer</button>
+        </div>
+      </div>
+      <div style="padding:12px 14px; overflow:auto;">
+        <div class="muted" id="textMeta" style="margin-bottom:10px;"></div>
+        <pre id="textContent" style="
+          white-space:pre-wrap; word-break:break-word;
+          background:#fafafa; border:1px solid #eee; border-radius:12px;
+          padding:12px; font-size:13px; line-height:1.35;"></pre>
+      </div>
+    </div>
+  </div>
 </body>
 </html>
