@@ -87,7 +87,7 @@
 <main>
   <div class="notice">
     <div><strong>Mode “comme Claude”</strong> : reconstruction d’un tableau lisible (aligné) depuis X/Y PDF + parsing DB depuis ce tableau.</div>
-    <div class="muted small">✅ Services : colonnes stables • ✅ Débours : lignes spéciales • ✅ Client_nom : nettoyé (pas d’adresse).</div>
+    <div class="muted small">✅ Surlignage stable • ✅ Client_nom sans adresse • Services = colonnes stables • Débours = lignes spéciales.</div>
   </div>
 
   <div id="globalMsg" class="msg warn" style="display:none; margin-bottom:14px;"></div>
@@ -131,7 +131,7 @@
   </div>
 </main>
 
-<!-- ✅ MODALE VIEWER (PLACÉE AVANT LES SCRIPTS POUR ÉVITER NULL) -->
+<!-- ✅ MODALE VIEWER (PLACÉE AVANT LES SCRIPTS) -->
 <div id="textModal" style="
   position:fixed; inset:0; background:rgba(0,0,0,.5);
   align-items:center; justify-content:center; padding:18px; z-index:9999;">
@@ -198,7 +198,7 @@
   function sanitizeFilename(name) { return name.replace(/[^a-zA-Z0-9.\-_]/g, "_").replace(/_{2,}/g, "_"); }
 
   // ------------------------------------------------------------
-  // HTML + regex helpers
+  // Escape HTML
   // ------------------------------------------------------------
   function escapeHtml(s) {
     return (s || "").replace(/[&<>"']/g, c => ({
@@ -207,7 +207,7 @@
   }
 
   // ------------------------------------------------------------
-  // ✅ Surlignage déterministe (ranges, plus d’aléatoire)
+  // ✅ Surlignage stable (non aléatoire)
   // ------------------------------------------------------------
   function highlightText(rawText, highlights) {
     if (!rawText) return "⚠️ Aucun texte.";
@@ -220,6 +220,7 @@
       for (let i = 0; i < s.length; i++) {
         let c = s[i];
         if (c === "’") c = "'";
+
         if (/\s/.test(c)) {
           if (lastWasSpace) continue;
           c = " ";
@@ -227,6 +228,7 @@
         } else {
           lastWasSpace = false;
         }
+
         norm += c.toLowerCase();
         map.push(i);
       }
@@ -234,17 +236,15 @@
     }
 
     const { norm: normText, map } = normalizeWithMap(rawText);
+    const ranges = [];
 
-    const sorted = [...(highlights || [])]
+    const sorted = [...highlights]
       .filter(h => h?.value && String(h.value).trim().length >= 3)
       .sort((a,b) => String(b.value).length - String(a.value).length);
-
-    const ranges = [];
 
     for (const h of sorted) {
       const tokenRaw = String(h.value).trim().replace(/’/g, "'");
       const { norm: normToken } = normalizeWithMap(tokenRaw);
-      if (!normToken || normToken.length < 3) continue;
 
       let from = 0;
       while (true) {
@@ -259,10 +259,10 @@
       }
     }
 
-    if (!ranges.length) return escapeHtml(rawText);
+    if (ranges.length === 0) return escapeHtml(rawText);
 
-    ranges.sort((a,b) => a.start - b.start || (b.end - b.start) - (a.end - a.start));
-
+    // merge overlaps
+    ranges.sort((a,b) => a.start - b.start || b.end - a.end);
     const merged = [];
     for (const r of ranges) {
       const last = merged[merged.length - 1];
@@ -270,6 +270,7 @@
       else if (r.end > last.end) last.end = r.end;
     }
 
+    // render
     let out = "";
     let pos = 0;
     for (const r of merged) {
@@ -323,25 +324,29 @@
     const val = parseFloat(n.replace(/[^0-9.]/g, ""));
     return Number.isFinite(val) ? val : null;
   }
+
   function parsePercent(str) {
     if (!str) return null;
-    const m = String(str).match(/(\d{1,2})\s*%/);
+    const m = str.match(/(\d{1,2})\s*%/);
     return m ? parseInt(m[1], 10) : null;
   }
+
   function parseFrenchDateAny(dateStr) {
     if (!dateStr) return null;
 
-    const mNum = String(dateStr).match(/(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/);
+    const mNum = dateStr.match(/(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/);
     if (mNum) {
       let d = parseInt(mNum[1],10), mo = parseInt(mNum[2],10), y = parseInt(mNum[3],10);
       if (y < 100) y += 2000;
       return `${y.toString().padStart(4,"0")}-${mo.toString().padStart(2,"0")}-${d.toString().padStart(2,"0")}`;
     }
 
-    const months = { "janvier":1, "février":2, "fevrier":2, "mars":3, "avril":4, "mai":5, "juin":6,
-      "juillet":7, "août":8, "aout":8, "septembre":9, "octobre":10, "novembre":11, "décembre":12, "decembre":12 };
+    const months = {
+      "janvier":1, "février":2, "fevrier":2, "mars":3, "avril":4, "mai":5, "juin":6,
+      "juillet":7, "août":8, "aout":8, "septembre":9, "octobre":10, "novembre":11, "décembre":12, "decembre":12
+    };
 
-    const mTxt = String(dateStr).toLowerCase().match(/(\d{1,2})\s+(janvier|février|fevrier|mars|avril|mai|juin|juillet|août|aout|septembre|octobre|novembre|décembre|decembre)\s+(\d{4})/);
+    const mTxt = dateStr.toLowerCase().match(/(\d{1,2})\s+(janvier|février|fevrier|mars|avril|mai|juin|juillet|août|aout|septembre|octobre|novembre|décembre|decembre)\s+(\d{4})/);
     if (mTxt) {
       const d = parseInt(mTxt[1],10);
       const mo = months[mTxt[2]];
@@ -349,89 +354,49 @@
       if (!mo) return null;
       return `${y.toString().padStart(4,"0")}-${String(mo).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
     }
+
     return null;
   }
 
   function splitSourceDest(desc) {
     let source = null, destination = null;
-    const mFromTo = String(desc || "").match(/de\s+(.+?)\s+à\s+(.+)/i);
+    const mFromTo = desc.match(/de\s+(.+?)\s+à\s+(.+)/i);
     if (mFromTo) { source = mFromTo[1].trim(); destination = mFromTo[2].trim(); }
-    const mArrow = String(desc || "").match(/(.+?)\s*(?:=>|>\s*=>?|=\s*>)\s*(.+)/);
+
+    const mArrow = desc.match(/(.+?)\s*(?:=>|>\s*=>?|=\s*>)\s*(.+)/);
     if (mArrow) { source = source || mArrow[1].trim(); destination = destination || mArrow[2].trim(); }
+
     return { source_lieu: source, destination_lieu: destination };
   }
 
   // ------------------------------------------------------------
-  // ✅ Client cleanup (supprime adresse & mentions parasites)
+  // ✅ Client Name cleaning (remove address)
   // ------------------------------------------------------------
   function cleanClientName(raw) {
     if (!raw) return null;
     let s = String(raw).replace(/\s+/g, " ").trim();
 
     const stopMarkers = [
-      " À l'attention", " A l'attention", " Attention",
+      " À l'attention", " A l'attention", " À l’attention", " A l’attention",
+      " Avenue", " Route", " Chemin", " Rue", " Boulevard", " Bd ", " Allée", " Impasse",
       " Adresse", " Pays", " Numéro", " Numero", " Code", " TVA", " Conditions",
-      " Mode de règlement", " Conditions de règlement",
-      " Avenue", " Route", " Chemin", " Rue", " Boulevard", " Bd "
+      " Numéro de TVA", " Numero de TVA", " Numéro d’entreprise", " Numero d’entreprise"
     ];
+
     for (const m of stopMarkers) {
       const idx = s.indexOf(m);
       if (idx > 2) { s = s.slice(0, idx).trim(); break; }
     }
 
-    // coupe très souvent au début des numéros d’adresse
-    const splitByNumber = s.split(/\b\d{2,5}\b/);
-    if (splitByNumber && splitByNumber[0] && splitByNumber[0].length >= 2) {
-      s = splitByNumber[0].trim();
-    }
+    // coupe dès qu'un motif ressemble à une adresse
+    // (un nombre 2..5 chiffres apparaît souvent au début d'une adresse)
+    const cut = s.split(/\b\d{2,5}\b/)[0].trim();
+    if (cut.length >= 2) s = cut;
 
-    // nettoyage final
     s = s.replace(/[,;:\-]+$/g, "").trim();
     if (s.length < 2) return null;
-    if (s.length > 120) s = s.slice(0, 120).trim();
+
     return s;
-  }
-
-  // ------------------------------------------------------------
-  // ✅ Extraction client_nom : nouveaux formats (Destinataire) + anciens formats (sans Destinataire)
-  // ------------------------------------------------------------
-  function extractClientName(t) {
-    t = String(t || "").replace(/\s+/g, " ").trim();
-
-    // 1) Nouveau format : "Destinataire ..."
-    let m = t.match(/Destinataire\s+(.+?)\s{2,}(?:À|A)\s*l'?attention/i) ||
-            t.match(/Destinataire\s+(.+?)\s{2,}Adresse/i) ||
-            t.match(/Destinataire\s+(.+?)\s{2,}Conditions/i) ||
-            t.match(/Destinataire\s+(.+?)\s{2,}Mode de règlement/i);
-
-    if (m) {
-      const rawBlock = m[1].trim();
-      const clean = cleanClientName(rawBlock);
-      if (clean) return { client: clean, raw: rawBlock };
-    }
-
-    // 2) Ancien format : pas "Destinataire", mais il y a souvent plusieurs blocs "Société : ..."
-    //    On cherche les occurrences "Société :" et on prend la dernière qui ressemble à un destinataire
-    const societes = Array.from(t.matchAll(/Société\s*:\s*(.+?)(?=\s+Adresse|\s+Pays|\s+Numéro|\s+Numero|\s+Code|\s+TVA|\s+Conditions|\s+Mode|\s+À|\s+A\s*l'attention)/gi));
-    if (societes.length >= 2) {
-      const last = societes[societes.length - 1];
-      const rawBlock = (last[1] || "").trim();
-      const clean = cleanClientName(rawBlock);
-      if (clean) return { client: clean, raw: rawBlock };
-    }
-
-    // 3) Fallback : avant "À l'attention" (on prend une fenêtre avant)
-    const idxAtt = t.toLowerCase().indexOf("à l'attention");
-    if (idxAtt > 0) {
-      const windowBefore = t.slice(Math.max(0, idxAtt - 140), idxAtt).trim();
-      // prend les derniers mots "propres" (évite adresse)
-      const parts = windowBefore.split("  ").join(" ").split(" ");
-      const candidate = parts.slice(-12).join(" ");
-      const clean = cleanClientName(candidate);
-      if (clean) return { client: clean, raw: candidate };
-    }
-
-    return { client: null, raw: null };
   }
 
   // ------------------------------------------------------------
@@ -439,8 +404,9 @@
   // ------------------------------------------------------------
   function parseInvoiceText(fullText) {
     const out = { version:"parser_v4_table_client_clean", parsed_at:new Date().toISOString(), fields:{}, matches:[] };
-    const t = String(fullText || "");
+    const t = fullText || "";
 
+    // Numéro facture
     const mFact = t.match(/\bFacture\s+([A-Z]{2,6}-\d{3,4}-\d{2,})\b/i) || t.match(/\bFACT-\d{4}-\d{2,}\b/);
     if (mFact) {
       const val = (mFact[1] || mFact[0]).trim();
@@ -448,6 +414,7 @@
       out.matches.push({ label:"numero_facture", value: val, raw: mFact[0] });
     }
 
+    // Date
     const mDateTxt = t.match(/\b(\d{1,2}\s+(janvier|février|fevrier|mars|avril|mai|juin|juillet|août|aout|septembre|octobre|novembre|décembre|decembre)\s+\d{4})\b/i);
     if (mDateTxt) {
       const rawDate = mDateTxt[1].trim();
@@ -468,14 +435,38 @@
       }
     }
 
-    // ✅ Client (nouveau + ancien)
-    const clientRes = extractClientName(t);
-    if (clientRes.client) {
-      out.fields.client_nom = clientRes.client;
-      out.matches.push({ label:"client_nom", value: clientRes.client, raw: clientRes.raw || clientRes.client });
+    // ✅ Client destinataire (nouveau format)
+    let client = null;
+    let rawBlock = null;
+
+    const mDest = t.match(/Destinataire\s+(.+?)\s{2,}(?:À|A)\s*l'?attention/i) ||
+                  t.match(/Destinataire\s+(.+?)\s{2,}Adresse/i) ||
+                  t.match(/Destinataire\s+(.+?)\s{2,}Conditions/i) ||
+                  t.match(/Destinataire\s+(.+?)\s{2,}Pays/i);
+
+    if (mDest) {
+      rawBlock = mDest[1].replace(/\s+/g," ").trim();
+      client = cleanClientName(rawBlock);
+    } else {
+      // ✅ Fallback ancien format : même zone mais sans mention "Destinataire"
+      // On prend le bloc juste avant "À l'attention de ..."
+      const mAtt = t.match(/([A-Z][\s\S]{2,120}?)\s+(?:À|A)\s*l'?attention\s+de/i);
+      if (mAtt) {
+        rawBlock = mAtt[1].replace(/\s+/g," ").trim();
+        // on évite d’embarquer l’émetteur si ça a débordé : on coupe au dernier marqueur connu
+        // (heuristique légère)
+        rawBlock = rawBlock.split(" Émetteur ").pop().trim();
+        rawBlock = rawBlock.split(" Autocars ").pop().trim(); // coupe si présence émetteur
+        client = cleanClientName(rawBlock);
+      }
     }
 
-    // Totaux (variants)
+    if (client) {
+      out.fields.client_nom = client;
+      out.matches.push({ label:"client_nom", value: client, raw: rawBlock || client });
+    }
+
+    // Totaux (simple)
     const mTotals1 = t.match(/Total\s*HT\s+TVA\s*\(\s*\d+%\s*\)\s+Total\s*TTC\s+([0-9\s.,]+)\s*€?\s+([0-9\s.,]+)\s*€?\s+([0-9\s.,]+)\s*€/i);
     if (mTotals1) {
       const htRaw = mTotals1[1].trim();
@@ -489,6 +480,7 @@
       out.matches.push({ label:"total_ttc", value: ttcRaw, raw: mTotals1[0] });
     }
 
+    // Totaux (avec débours)
     const mTotals2 = t.match(/Total\s*HT\s+TVA\s*\(\s*\d+%\s*\)\s+Total\s*TTC\s+Débours\s+Total\s+à\s+payer\s+([0-9\s.,]+)\s*€\s+([0-9\s.,]+)\s*€\s+([0-9\s.,]+)\s*€\s+([0-9\s.,]+)\s*€\s+([0-9\s.,]+)\s*€/i);
     if (mTotals2) {
       const htRaw = mTotals2[1].trim();
@@ -512,7 +504,7 @@
   }
 
   // ------------------------------------------------------------
-  // ✅ Table extraction from PDF positions (X/Y)
+  // Table extraction from PDF positions (X/Y)
   // ------------------------------------------------------------
   function groupItemsIntoLines(items, yTolerance = 2.5) {
     const sorted = [...items].sort((a,b) => b.y - a.y);
@@ -616,7 +608,7 @@
   }
 
   // ------------------------------------------------------------
-  // ✅ Parse LINES from TABLE for DB
+  // Parse LINES from TABLE for DB
   // ------------------------------------------------------------
   function parseLinesFromTable(tablePages, parserOut) {
     const lines = [];
@@ -750,7 +742,7 @@
   })();
 
   function initApp() {
-    // --- Viewer DOM refs (modal exists)
+    // Viewer refs
     const textModal = document.getElementById("textModal");
     const closeTextBtn = document.getElementById("closeTextBtn");
     const copyTextBtn = document.getElementById("copyTextBtn");
@@ -787,7 +779,7 @@
     tabTextBtn.onclick = () => setTab("text");
     tabTableBtn.onclick = () => setTab("table");
 
-    // --- Auth
+    // Auth
     async function refreshAuthStatus() {
       const { data: { user } } = await sb.auth.getUser();
       if (user) {
@@ -830,7 +822,7 @@
       return user;
     }
 
-    // --- UI list
+    // UI list
     function render() {
       selectedCount.textContent = String(state.files.length);
       const anyBusy = state.files.some(f => ["uploading","extracting"].includes(f.status));
@@ -883,7 +875,7 @@
     function addFiles(fileList) {
       const incoming = Array.from(fileList);
       for (const file of incoming) {
-        if (state.files.length >= 20) break;
+        if (state.files.length >= MAX_FILES) break;
         if (!isPdf(file)) { state.files.push({ file, status:"error", error:"PDF uniquement" }); continue; }
         if (file.size > MAX_SIZE) { state.files.push({ file, status:"error", error:"Max 10MB" }); continue; }
         state.files.push({ file, status:"ready", error:null, factureId:null, uploadPath:null });
@@ -894,7 +886,10 @@
     fileInput.addEventListener("change", (e) => addFiles(e.target.files));
     dropZone.addEventListener("dragover", (e) => { e.preventDefault(); dropZone.classList.add("drag"); });
     dropZone.addEventListener("dragleave", () => dropZone.classList.remove("drag"));
-    dropZone.addEventListener("drop", (e) => { e.preventDefault(); dropZone.classList.remove("drag"); if (e.dataTransfer?.files) addFiles(e.dataTransfer.files); });
+    dropZone.addEventListener("drop", (e) => {
+      e.preventDefault(); dropZone.classList.remove("drag");
+      if (e.dataTransfer?.files) addFiles(e.dataTransfer.files);
+    });
     clearBtn.onclick = () => { state.files = []; render(); };
 
     async function uploadAndProcessOne(item) {
@@ -951,7 +946,6 @@
         const content = await page.getTextContent();
 
         fullText += `\n\n=== PAGE ${p} ===\n` + content.items.map(it => it.str).join(" ");
-
         const table = extractPdfTableFromTextContent(content);
         tablePages.push({ page: p, ...table });
       }
@@ -960,7 +954,6 @@
       if (fullText.length < 30) throw new Error("Texte extrait vide/trop court (PDF scan ?)");
 
       const parsed = parseInvoiceText(fullText);
-
       parsed.table = tablePages;
       parsed.lines = parseLinesFromTable(tablePages, parsed);
 
@@ -1059,11 +1052,13 @@
 
       renderHighlightsBox(data);
 
-      // default tab
+      // Default tab
       textWrap.style.display = "block";
       tableWrap.style.display = "none";
+
       textModal.classList.add("open");
 
+      // Render table
       const tablePages = data?.donnees_brutes?.table || [];
       const servicesAll = [];
       const deboursAll = [];
@@ -1075,10 +1070,11 @@
         ? renderPdfTableHtml(servicesAll, deboursAll)
         : `<div class="muted">Aucun tableau stocké. (Ré-import nécessaire pour anciennes factures)</div>`;
 
-      // Render highlighted text
+      // Highlighted text
       textContent.innerHTML = "<i>Chargement…</i>";
       const rawText = (data.texte_ocr || "").trim();
       const highlights = buildHighlightsFromDB(data);
+
       requestAnimationFrame(() => {
         textContent.innerHTML = highlightText(rawText || "⚠️ Aucun texte.", highlights);
       });
@@ -1096,9 +1092,7 @@
       else setMsg("err", `⚠️ Terminé : ${okCount} OK, ${errCount} erreurs.`);
     };
 
-    // drag/drop + input
-    function renderInit() { render(); }
-    renderInit();
+    render();
   }
 </script>
 </body>
