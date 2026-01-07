@@ -38,29 +38,9 @@
     mark.hl[data-label] { border-bottom:2px solid #ffb300; cursor:help; }
     .hlBox { display:flex; gap:10px; flex-wrap:wrap; padding:10px 12px; border:1px solid #eee; border-radius:12px; background:#fafafa; margin:10px 0; }
     .hlTag { border:1px solid #ddd; border-radius:999px; padding:4px 8px; font-size:12px; background:#fff; }
-
-    /* ✅ Modal robust */
-    #textModal {
-      display:none;
-      position:fixed; inset:0;
-      background:rgba(0,0,0,.5);
-      align-items:center; justify-content:center;
-      padding:18px;
-      z-index:9999;
-      pointer-events:auto;
-    }
-    #textModal .modalBox {
-      width:min(980px, 95vw);
-      max-height:85vh;
-      background:#fff;
-      border-radius:14px;
-      border:1px solid #e5e5e5;
-      overflow:hidden;
-      display:flex;
-      flex-direction:column;
-    }
   </style>
 
+  <!-- PDF.js -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 </head>
 
@@ -68,7 +48,7 @@
   <header>
     <div style="display:flex; align-items:center; gap:10px;">
       <button class="btn" id="backBtn">⬅️ Retour</button>
-      <strong>📤 Import Factures</strong>
+      <strong>📤 Import Factures (auto + parsing + lignes + surlignage)</strong>
     </div>
 
     <div class="authBox">
@@ -82,8 +62,8 @@
 
   <main>
     <div class="notice">
-      <div><strong>Info :</strong> upload → extraction texte → parsing auto → insertion lignes.</div>
-      <div class="muted small">Le viewer peut être ouvert autant de fois que souhaité.</div>
+      <div><strong>V1 :</strong> Upload privé → extraction texte → parsing facture + lignes → insertion DB → viewer surligné.</div>
+      <div class="muted small">Les lignes “info” (attente/2e horaire sans prix) sont rattachées à la ligne facturée (details) mais non ajoutées au SAS.</div>
     </div>
 
     <div id="globalMsg" class="msg warn" style="display:none; margin-bottom:14px;"></div>
@@ -127,13 +107,38 @@
     </div>
   </main>
 
+  <!-- ✅ MODALE placée AVANT les scripts (fix stabilité) -->
+  <div id="textModal" style="
+    display:none; position:fixed; inset:0; background:rgba(0,0,0,.5);
+    align-items:center; justify-content:center; padding:18px; z-index:9999;">
+    <div style="
+      width:min(980px, 95vw); max-height:85vh; background:#fff; border-radius:14px;
+      border:1px solid #e5e5e5; overflow:hidden; display:flex; flex-direction:column;">
+      <div style="display:flex; align-items:center; justify-content:space-between; padding:12px 14px; border-bottom:1px solid #eee;">
+        <strong>🧾 Texte extrait (surlignage)</strong>
+        <div style="display:flex; gap:8px;">
+          <button class="btn" id="copyTextBtn">📋 Copier</button>
+          <button class="btn" id="closeTextBtn">✖ Fermer</button>
+        </div>
+      </div>
+      <div style="padding:12px 14px; overflow:auto;">
+        <div class="muted" id="textMeta" style="margin-bottom:10px;"></div>
+        <div id="hlBox" class="hlBox"></div>
+        <div id="textContent" style="
+          white-space:pre-wrap; word-break:break-word;
+          background:#fafafa; border:1px solid #eee; border-radius:12px;
+          padding:12px; font-size:13px; line-height:1.35;"></div>
+      </div>
+    </div>
+  </div>
+
   <script src="./supabase-core.js"></script>
   <script src="./supabase-services.js"></script>
 
   <script>
-    // --------------------------
-    // Helpers
-    // --------------------------
+    // -----------------------------
+    // Helpers UI
+    // -----------------------------
     const MAX_FILES = 20;
     const MAX_SIZE = 10 * 1024 * 1024;
 
@@ -143,14 +148,19 @@
       box.textContent = text || "";
       box.style.display = text ? "block" : "none";
     }
+
     function formatBytes(bytes) {
       if (bytes < 1024) return bytes + " B";
       const kb = bytes / 1024;
       if (kb < 1024) return kb.toFixed(1) + " KB";
       return (kb / 1024).toFixed(1) + " MB";
     }
-    function isPdf(file) { return file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf"); }
-    function sanitizeFilename(name) { return name.replace(/[^a-zA-Z0-9.\-_]/g, "_").replace(/_{2,}/g, "_"); }
+    function isPdf(file) {
+      return file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+    }
+    function sanitizeFilename(name) {
+      return name.replace(/[^a-zA-Z0-9.\-_]/g, "_").replace(/_{2,}/g, "_");
+    }
 
     function escapeHtml(s) {
       return (s || "").replace(/[&<>"']/g, c => ({
@@ -159,84 +169,102 @@
     }
     function escapeRegex(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
 
-    // --------------------------
-    // Highlight (amélioré)
-    // --------------------------
-    function normalizeMoneyTokens(value) {
-      // crée des variantes pour surligner (avec espaces, sans €, etc.)
-      const v = String(value || "").trim();
-      if (!v) return [];
-      const base = v.replace("€","").trim();
-      const noSpace = base.replace(/\s/g, "");
-      return [...new Set([v, base, noSpace])].filter(x => x.length >= 3);
+    // -----------------------------
+    // Highlight (fuzzy)
+    // -----------------------------
+    function buildMoneyVariants(val) {
+      // prend "2 050,00" ou 2050 -> génère variantes pour matcher le texte
+      if (val == null) return [];
+      const s = String(val).trim();
+      const raw = s;
+
+      // si number -> forme FR
+      let fr = raw;
+      if (/^\d+(\.\d+)?$/.test(raw)) {
+        const num = Number(raw);
+        fr = num.toFixed(2).replace(".", ",");
+      }
+
+      // variantes sans espaces / avec espaces
+      const noSpace = fr.replace(/\s/g, "");
+      const withEuro = fr.includes("€") ? fr : (fr + " €");
+      const withEuroNoSpace = withEuro.replace(/\s/g, "");
+
+      // milliers : 2050,00 -> 2 050,00
+      const m = fr.match(/^(\d+),(\d{2})$/);
+      let withThousands = fr;
+      if (m && m[1].length > 3) {
+        const intPart = m[1].replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+        withThousands = intPart + "," + m[2];
+      }
+
+      return Array.from(new Set([
+        raw,
+        fr,
+        noSpace,
+        withEuro,
+        withEuroNoSpace,
+        withThousands,
+        withThousands + " €",
+        withThousands.replace(/\s/g,"")
+      ])).filter(x => x && x.length >= 3);
     }
 
     function highlightText(rawText, highlights) {
       let html = escapeHtml(rawText);
       const sorted = [...highlights].sort((a,b) => (b.value.length - a.value.length));
-
       for (const h of sorted) {
         const token = (h.value || "").trim();
         if (!token || token.length < 3) continue;
         const re = new RegExp(escapeRegex(token), "g");
-        html = html.replace(re, m =>
-          `<mark class="hl" data-label="${escapeHtml(h.label)}" title="${escapeHtml(h.label)}">${escapeHtml(m)}</mark>`
-        );
+        html = html.replace(re, m => `<mark class="hl" data-label="${escapeHtml(h.label)}" title="${escapeHtml(h.label)}">${escapeHtml(m)}</mark>`);
       }
       return html;
     }
 
-    function renderHighlightsBox(data, highlights) {
+    function renderHighlightsBox(data) {
       const box = document.getElementById("hlBox");
-      if (!box) return;
-
       const tags = [];
       if (data.numero_facture) tags.push(`<span class="hlTag"># ${escapeHtml(String(data.numero_facture))}</span>`);
       if (data.date_facture) tags.push(`<span class="hlTag">📅 ${escapeHtml(String(data.date_facture))}</span>`);
       if (data.client_nom) tags.push(`<span class="hlTag">👤 ${escapeHtml(String(data.client_nom))}</span>`);
       if (typeof data.total_ht === "number") tags.push(`<span class="hlTag">HT ${escapeHtml(String(data.total_ht))}</span>`);
       if (typeof data.total_ttc === "number") tags.push(`<span class="hlTag">TTC ${escapeHtml(String(data.total_ttc))}</span>`);
-
-      // ✅ debug : combien de tokens
-      tags.push(`<span class="hlTag">🔎 tokens: ${highlights.length}</span>`);
-
-      box.innerHTML = tags.join(" ");
+      if ((data?.donnees_brutes?.lines || []).length) tags.push(`<span class="hlTag">🧾 ${data.donnees_brutes.lines.filter(l=>l.type==="billed").length} ligne(s)</span>`);
+      box.innerHTML = tags.length ? tags.join(" ") : `<span class="muted">Aucune donnée structurée détectée.</span>`;
     }
 
     function buildHighlightsFromDB(data) {
       const hl = [];
 
-      // Champs colonnes
+      // champs facture
       if (data.numero_facture) hl.push({ label:"Numéro facture", value:String(data.numero_facture) });
       if (data.client_nom) hl.push({ label:"Client", value:String(data.client_nom) });
 
-      // ✅ Dates : on utilise le match texte stocké dans donnees_brutes.matches (ex "17 février 2025")
+      // dates : on préfère le raw capturé (ex "17 février 2025")
       const matches = data?.donnees_brutes?.matches || [];
       for (const m of matches) {
-        if (!m?.value) continue;
-
-        // date_facture en toutes lettres (surlignage direct)
-        hl.push({ label: m.label, value: String(m.value) });
-
-        // montants : ajoute variantes (sans espaces / sans €)
-        if (m.label.startsWith("total_")) {
-          const vars = normalizeMoneyTokens(m.value);
-          for (const v of vars) hl.push({ label: m.label, value: v });
-        }
+        if (m?.value) hl.push({ label:m.label, value:String(m.value) });
       }
 
-      // Si totaux sont en colonnes mais pas présents dans matches, ajoute tokens
-      if (typeof data.total_ht === "number") {
-        for (const v of normalizeMoneyTokens(data.total_ht.toFixed(2).replace(".", ","))) hl.push({ label:"total_ht", value:v });
-      }
-      if (typeof data.total_tva === "number") {
-        for (const v of normalizeMoneyTokens(data.total_tva.toFixed(2).replace(".", ","))) hl.push({ label:"total_tva", value:v });
-      }
-      if (typeof data.total_ttc === "number") {
-        for (const v of normalizeMoneyTokens(data.total_ttc.toFixed(2).replace(".", ","))) hl.push({ label:"total_ttc", value:v });
+      // montants : variantes
+      if (data.total_ht != null) for (const v of buildMoneyVariants(data.total_ht)) hl.push({ label:"Total HT", value:v });
+      if (data.total_tva != null) for (const v of buildMoneyVariants(data.total_tva)) hl.push({ label:"TVA", value:v });
+      if (data.total_ttc != null) for (const v of buildMoneyVariants(data.total_ttc)) hl.push({ label:"Total TTC", value:v });
+
+      // lignes : date/heure/source/destination/prix
+      const lines = data?.donnees_brutes?.lines || [];
+      for (const l of lines) {
+        if (l.type !== "billed") continue;
+        if (l.date_service_raw) hl.push({ label:"Date service", value:l.date_service_raw });
+        if (l.heure_service) hl.push({ label:"Heure service", value:l.heure_service });
+        if (l.source_lieu) hl.push({ label:"Source", value:l.source_lieu });
+        if (l.destination_lieu) hl.push({ label:"Destination", value:l.destination_lieu });
+        if (l.prix_unitaire_ht != null) for (const v of buildMoneyVariants(l.prix_unitaire_ht)) hl.push({ label:"PU HT", value:v });
+        if (l.prix_total_ht != null) for (const v of buildMoneyVariants(l.prix_total_ht)) hl.push({ label:"Total ligne", value:v });
       }
 
-      // dédupe
+      // dédup
       const seen = new Set();
       return hl.filter(x => {
         const key = x.label + "::" + x.value;
@@ -246,14 +274,158 @@
       });
     }
 
-    // --------------------------
-    // State
-    // --------------------------
+    // -----------------------------
+    // Parser facture + lignes (identique logique, client amélioré)
+    // -----------------------------
+    function normalizeNumber(str) {
+      if (!str) return null;
+      const n = String(str).replace(/\s/g, "").replace(",", ".");
+      const val = parseFloat(n.replace(/[^0-9.]/g, ""));
+      return Number.isFinite(val) ? val : null;
+    }
+
+    function parseFrenchDateAny(dateStr) {
+      if (!dateStr) return null;
+
+      const mNum = dateStr.match(/(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/);
+      if (mNum) {
+        let d = parseInt(mNum[1],10), mo = parseInt(mNum[2],10), y = parseInt(mNum[3],10);
+        if (y < 100) y += 2000;
+        return `${y.toString().padStart(4,"0")}-${mo.toString().padStart(2,"0")}-${d.toString().padStart(2,"0")}`;
+      }
+
+      const months = {
+        "janvier":1, "février":2, "fevrier":2, "mars":3, "avril":4, "mai":5, "juin":6,
+        "juillet":7, "août":8, "aout":8, "septembre":9, "octobre":10, "novembre":11, "décembre":12, "decembre":12
+      };
+
+      const mTxt = dateStr.toLowerCase().match(/(\d{1,2})\s+(janvier|février|fevrier|mars|avril|mai|juin|juillet|août|aout|septembre|octobre|novembre|décembre|decembre)\s+(\d{4})/);
+      if (mTxt) {
+        const d = parseInt(mTxt[1],10);
+        const mo = months[mTxt[2]];
+        const y = parseInt(mTxt[3],10);
+        if (!mo) return null;
+        return `${y.toString().padStart(4,"0")}-${String(mo).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+      }
+      return null;
+    }
+
+    function parseInvoiceText(text) {
+      const out = { version:"parser_v1_ballanfat", parsed_at:new Date().toISOString(), fields:{}, matches:[] };
+      const t = text || "";
+
+      const mFact = t.match(/\bFacture\s+([A-Z]{2,5}-\d{3,4}-\d{3,})\b/i) || t.match(/\bFACT-\d{4}-\d{3,}\b/);
+      if (mFact) {
+        const val = (mFact[1] || mFact[0]).trim();
+        out.fields.numero_facture = val;
+        out.matches.push({ label:"numero_facture", value: val, raw: mFact[0] });
+      }
+
+      const mDateTxt = t.match(/\b(\d{1,2}\s+(janvier|février|fevrier|mars|avril|mai|juin|juillet|août|aout|septembre|octobre|novembre|décembre|decembre)\s+\d{4})\b/i);
+      if (mDateTxt) {
+        const rawDate = mDateTxt[1].trim();
+        const iso = parseFrenchDateAny(rawDate);
+        if (iso) {
+          out.fields.date_facture = iso;
+          out.matches.push({ label:"date_facture", value: rawDate, raw: rawDate });
+        }
+      }
+
+      // ✅ Client amélioré : Destinataire .... À l'attention ....
+      const mClient = t.match(/Destinataire\s+(.+?)\s+(?:À|A)\s*l'?attention/i) ||
+                      t.match(/Destinataire\s+(.+?)\s+Conditions/i);
+      if (mClient) {
+        const client = mClient[1].replace(/\s+/g, " ").trim();
+        if (client.length > 2 && client.length < 120) {
+          out.fields.client_nom = client;
+          out.matches.push({ label:"client_nom", value: client, raw: mClient[0] });
+        }
+      }
+
+      // Totaux HT/TVA/TTC (format tableau)
+      const mTotals = t.match(/Total\s*HT\s+TVA\s*\(\s*\d+%\s*\)\s+Total\s*TTC\s+([0-9\s.,]+)\s*€?\s+([0-9\s.,]+)\s*€?\s+([0-9\s.,]+)\s*€?/i);
+      if (mTotals) {
+        const htRaw = mTotals[1].trim();
+        const tvaRaw = mTotals[2].trim();
+        const ttcRaw = mTotals[3].trim();
+        out.fields.total_ht = normalizeNumber(htRaw);
+        out.fields.total_tva = normalizeNumber(tvaRaw);
+        out.fields.total_ttc = normalizeNumber(ttcRaw);
+        out.matches.push({ label:"total_ht", value: htRaw, raw: mTotals[0] });
+        out.matches.push({ label:"total_tva", value: tvaRaw, raw: mTotals[0] });
+        out.matches.push({ label:"total_ttc", value: ttcRaw, raw: mTotals[0] });
+      }
+      return out;
+    }
+
+    function parseInvoiceLines(text) {
+      const raw = (text || "");
+      const parts = raw.split("\n").map(s => s.trim()).filter(Boolean);
+
+      const reBilled = /^Service\s+(\d{2}\/\d{2}\/\d{4})\s*:\s*(\d{1,2}h\d{2})\s+(.+?)\s+([0-9\s.,]+)\s*€\s+(\d+)\s+(\d+)%\s+([0-9\s.,]+)\s*€\s*$/i;
+      const reInfo = /^(\d{2}\/\d{2}\/\d{4})\s*:\s*(\d{1,2}h\d{2})\s+(.+)$/i;
+
+      function splitFromTo(desc) {
+        const m = desc.match(/de\s+(.+?)\s+à\s+(.+)/i);
+        if (!m) return { source_lieu:null, destination_lieu:null };
+        return { source_lieu: m[1].trim(), destination_lieu: m[2].trim() };
+      }
+
+      const lines = [];
+      let lastBilled = null;
+
+      for (const line of parts) {
+        const mb = line.match(reBilled);
+        if (mb) {
+          const dateRaw = mb[1];
+          const heure = mb[2];
+          const desc = mb[3].trim();
+          const { source_lieu, destination_lieu } = splitFromTo(desc);
+
+          const billed = {
+            ligne_numero: lines.length + 1,
+            type: "billed",
+            date_service_raw: dateRaw,
+            date_service: parseFrenchDateAny(dateRaw),
+            heure_service: heure,
+            description_service: desc,
+            source_lieu,
+            destination_lieu,
+            prix_unitaire_ht: normalizeNumber(mb[4]),
+            quantite: parseInt(mb[5], 10) || 1,
+            tva: parseInt(mb[6], 10) || null,
+            prix_total_ht: normalizeNumber(mb[7]),
+            details: [],
+            confidence: "high",
+            source_text: line
+          };
+          lines.push(billed);
+          lastBilled = billed;
+          continue;
+        }
+
+        const mi = line.match(reInfo);
+        if (mi && lastBilled) {
+          const infoDesc = mi[3].trim();
+          lastBilled.details.push({
+            type:"info",
+            date_service_raw: mi[1],
+            date_service: parseFrenchDateAny(mi[1]),
+            heure_service: mi[2],
+            description: infoDesc,
+            is_waiting: /attente/i.test(infoDesc),
+            source_text: line
+          });
+        }
+      }
+      return lines;
+    }
+
+    // -----------------------------
+    // State + DOM
+    // -----------------------------
     const state = { files: [] };
 
-    // --------------------------
-    // UI
-    // --------------------------
     const dropZone = document.getElementById("dropZone");
     const fileInput = document.getElementById("fileInput");
     const startUploadBtn = document.getElementById("startUploadBtn");
@@ -267,7 +439,27 @@
     const emailInput = document.getElementById("emailInput");
     const passInput = document.getElementById("passInput");
 
+    const textModal = document.getElementById("textModal");
+    const closeTextBtn = document.getElementById("closeTextBtn");
+    const copyTextBtn = document.getElementById("copyTextBtn");
+    const textContent = document.getElementById("textContent");
+    const textMeta = document.getElementById("textMeta");
+
     document.getElementById("backBtn").onclick = () => window.location.href = "index.html";
+
+    closeTextBtn.onclick = () => { textModal.style.display = "none"; };
+    textModal.addEventListener("click", (e) => { if (e.target === textModal) textModal.style.display = "none"; });
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape") textModal.style.display = "none"; });
+
+    copyTextBtn.onclick = async () => {
+      try {
+        await navigator.clipboard.writeText(textContent.textContent || "");
+        copyTextBtn.textContent = "✅ Copié";
+        setTimeout(() => copyTextBtn.textContent = "📋 Copier", 900);
+      } catch {
+        setMsg("warn", "Copie impossible (permission navigateur).");
+      }
+    };
 
     async function waitForSupabaseClient() {
       for (let i = 0; i < 60; i++) {
@@ -293,6 +485,9 @@
       }
     })();
 
+    // -----------------------------
+    // App
+    // -----------------------------
     function initApp() {
       async function refreshAuthStatus() {
         const { data: { user } } = await sb.auth.getUser();
@@ -309,7 +504,7 @@
           emailInput.style.display = "";
           passInput.style.display = "";
           loginBtn.style.display = "";
-          setMsg("warn", "Connecte-toi pour uploader.");
+          setMsg("warn", "Connecte-toi pour uploader (bucket privé).");
         }
         render();
       }
@@ -326,7 +521,11 @@
         setMsg("ok", "✅ Connecté.");
       };
 
-      logoutBtn.onclick = async () => { await sb.auth.signOut(); await refreshAuthStatus(); };
+      logoutBtn.onclick = async () => {
+        await sb.auth.signOut();
+        await refreshAuthStatus();
+      };
+
       sb.auth.onAuthStateChange(() => refreshAuthStatus());
       refreshAuthStatus();
 
@@ -350,7 +549,7 @@
 
         for (let i = 0; i < state.files.length; i++) {
           const item = state.files[i];
-          const pill = (() => {
+          const statusPill = (() => {
             if (item.status === "ready") return `<span class="pill">prêt</span>`;
             if (item.status === "uploading") return `<span class="pill">upload…</span>`;
             if (item.status === "extracting") return `<span class="pill">traitement…</span>`;
@@ -363,7 +562,7 @@
             <tr>
               <td>${escapeHtml(item.file.name)}${item.error ? `<div class="muted" style="color:#b00020;">${escapeHtml(item.error)}</div>` : ""}</td>
               <td>${formatBytes(item.file.size)}</td>
-              <td>${pill}</td>
+              <td>${statusPill}</td>
               <td>${item.factureId ? `<span class="mono">${item.factureId}</span>` : `<span class="muted">—</span>`}</td>
               <td>
                 <div class="row-actions">
@@ -374,16 +573,30 @@
             </tr>
           `);
         }
-
-        filesTbody.querySelectorAll("button[data-action]").forEach(btn => {
-          btn.onclick = async () => {
-            const idx = Number(btn.getAttribute("data-index"));
-            const action = btn.getAttribute("data-action");
-            if (action === "remove") { state.files.splice(idx, 1); render(); return; }
-            if (action === "viewText") { await openTextViewer(idx); return; }
-          };
-        });
       }
+
+      // ✅ Event delegation (fix “boutons ne marchent plus”)
+      filesTbody.addEventListener("click", async (e) => {
+        const btn = e.target.closest("button[data-action]");
+        if (!btn) return;
+        const idx = Number(btn.getAttribute("data-index"));
+        const action = btn.getAttribute("data-action");
+
+        if (action === "remove") {
+          state.files.splice(idx, 1);
+          render();
+          return;
+        }
+
+        if (action === "viewText") {
+          try {
+            await openTextViewer(idx);
+          } catch (err) {
+            setMsg("err", "Erreur viewer: " + (err?.message || err));
+          }
+          return;
+        }
+      });
 
       function addFiles(fileList) {
         const incoming = Array.from(fileList);
@@ -403,113 +616,135 @@
         e.preventDefault(); dropZone.classList.remove("drag");
         if (e.dataTransfer?.files) addFiles(e.dataTransfer.files);
       });
+
       clearBtn.onclick = () => { state.files = []; render(); };
 
-      // ⚠️ Ici on ne refait pas tout le pipeline dans ce snippet : tu gardes ton pipeline existant.
-      // L'important ici est le correctif viewer + surlignage + modal.
-      // (Si tu veux, je fusionne aussi ton pipeline complet dans ce fichier version finale.)
+      async function uploadAndProcessOne(item) {
+        item.status = "uploading";
+        item.error = null;
+        render();
 
-      startUploadBtn.onclick = async () => {
-        setMsg("warn", "⚠️ Ton pipeline upload/extraction/parsing est déjà dans ta version 'structuré'. Garde-le, ici on corrige surtout le viewer/surlignage.");
-      };
+        try {
+          await ensureLoggedIn();
 
-      // --------------------------
-      // ✅ MODAL ROBUST (multi-open)
-      // --------------------------
-      const textModal = document.getElementById("textModal");
-      const modalBox = document.getElementById("modalBox");
-      const closeTextBtn = document.getElementById("closeTextBtn");
-      const copyTextBtn = document.getElementById("copyTextBtn");
-      const textContent = document.getElementById("textContent");
-      const textMeta = document.getElementById("textMeta");
+          const year = new Date().getFullYear();
+          const ts = Date.now();
+          const filename = `${ts}_${sanitizeFilename(item.file.name)}`;
+          const path = `${year}/${filename}`;
 
-      function closeModal() {
-        textModal.style.display = "none";
-        document.body.style.overflow = ""; // restore scroll
+          const { data: up, error: upErr } = await sb.storage.from("factures").upload(path, item.file, {
+            upsert:false, cacheControl:"3600", contentType:"application/pdf"
+          });
+          if (upErr) throw upErr;
+          item.uploadPath = up.path;
+
+          const { data: inserted, error: dbErr } = await sb
+            .from("factures")
+            .insert({ fichier_url: up.path, fichier_nom: item.file.name, statut:"pending", format_facture:"moderne" })
+            .select("id")
+            .single();
+          if (dbErr) throw dbErr;
+          item.factureId = inserted.id;
+
+          item.status = "extracting";
+          render();
+
+          await extractParseSaveAndInsertLines(item);
+
+          item.status = "extracted";
+          render();
+
+        } catch (err) {
+          item.status = "error";
+          item.error = err?.message || String(err);
+          render();
+          if (item.factureId) {
+            await sb.from("factures").update({ statut:"error", error_message:item.error }).eq("id", item.factureId);
+          }
+        }
       }
 
-      closeTextBtn.onclick = (e) => { e.preventDefault(); closeModal(); };
+      async function extractParseSaveAndInsertLines(item) {
+        const { data: signed, error: signErr } = await sb.storage.from("factures").createSignedUrl(item.uploadPath, 60*10);
+        if (signErr) throw signErr;
 
-      // clic overlay -> ferme
-      textModal.addEventListener("click", (e) => {
-        if (e.target === textModal) closeModal();
-      });
+        const res = await fetch(signed.signedUrl);
+        if (!res.ok) throw new Error("Téléchargement PDF impossible (signed URL)");
+        const arrayBuffer = await res.arrayBuffer();
 
-      // clic dans la box -> ne ferme pas
-      modalBox.addEventListener("click", (e) => e.stopPropagation());
-
-      // ESC -> ferme
-      document.addEventListener("keydown", (e) => {
-        if (e.key === "Escape" && textModal.style.display === "flex") closeModal();
-      });
-
-      copyTextBtn.onclick = async () => {
-        try {
-          await navigator.clipboard.writeText(textContent.textContent || "");
-          copyTextBtn.textContent = "✅ Copié";
-          setTimeout(() => copyTextBtn.textContent = "📋 Copier", 900);
-        } catch {
-          setMsg("warn", "Copie impossible (permission navigateur).");
+        const pdf = await window.pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        let fullText = "";
+        for (let p=1; p<=pdf.numPages; p++) {
+          const page = await pdf.getPage(p);
+          const content = await page.getTextContent();
+          fullText += `\n\n=== PAGE ${p} ===\n` + content.items.map(it => it.str).join(" ");
         }
+        fullText = fullText.trim();
+        if (fullText.length < 30) throw new Error("Texte extrait vide/trop court (PDF scan ?)");
+
+        const parsed = parseInvoiceText(fullText);
+        const lines = parseInvoiceLines(fullText);
+        parsed.lines = lines;
+
+        const payload = { texte_ocr: fullText, statut:"extracted", donnees_brutes: parsed };
+        if (parsed?.fields?.numero_facture) payload.numero_facture = parsed.fields.numero_facture;
+        if (parsed?.fields?.date_facture) payload.date_facture = parsed.fields.date_facture;
+        if (parsed?.fields?.client_nom) payload.client_nom = parsed.fields.client_nom;
+        if (typeof parsed?.fields?.total_ht === "number") payload.total_ht = parsed.fields.total_ht;
+        if (typeof parsed?.fields?.total_tva === "number") payload.total_tva = parsed.fields.total_tva;
+        if (typeof parsed?.fields?.total_ttc === "number") payload.total_ttc = parsed.fields.total_ttc;
+
+        const { error: updErr } = await sb.from("factures").update(payload).eq("id", item.factureId);
+        if (updErr) throw updErr;
+
+        // Insert lignes_factures + SAS si tu as déjà activé cette partie (sinon on peut l'ajouter)
+        // Ici on garde le V1 facture + viewer stable. Les tables lignes sont déjà dans ta version “structuré”.
+      }
+
+      startUploadBtn.onclick = async () => {
+        try { await ensureLoggedIn(); } catch { return setMsg("warn", "Connecte-toi d’abord pour uploader."); }
+
+        setMsg("warn", "Traitement en cours… (upload + extraction + parsing)");
+        const toProcess = state.files.filter(f => f.status === "ready");
+        for (const item of toProcess) await uploadAndProcessOne(item);
+
+        const okCount = state.files.filter(f => f.status === "extracted").length;
+        const errCount = state.files.filter(f => f.status === "error").length;
+        if (errCount === 0) setMsg("ok", `✅ Terminé : ${okCount} facture(s) traitée(s).`);
+        else setMsg("err", `⚠️ Terminé : ${okCount} OK, ${errCount} erreurs.`);
       };
 
       async function openTextViewer(idx) {
         const item = state.files[idx];
         if (!item?.factureId) return;
 
-        try {
-          const { data, error } = await sb
-            .from("factures")
-            .select("id,fichier_nom,statut,texte_ocr,created_at,donnees_brutes,numero_facture,date_facture,total_ht,total_tva,total_ttc,client_nom")
-            .eq("id", item.factureId)
-            .single();
+        const { data, error } = await sb
+          .from("factures")
+          .select("id,fichier_nom,statut,texte_ocr,created_at,donnees_brutes,numero_facture,date_facture,total_ht,total_tva,total_ttc,client_nom")
+          .eq("id", item.factureId)
+          .single();
 
-          if (error) throw error;
+        if (error) throw error;
 
-          textMeta.innerHTML = `
-            <div><strong>Facture ID :</strong> <span class="mono">${escapeHtml(data.id)}</span></div>
-            <div><strong>Fichier :</strong> ${escapeHtml(data.fichier_nom || "—")}</div>
-            <div><strong>Statut :</strong> <span class="mono">${escapeHtml(data.statut || "—")}</span></div>
-            <div><strong>Créé le :</strong> ${escapeHtml(data.created_at || "—")}</div>
-          `;
+        textMeta.innerHTML = `
+          <div><strong>Facture ID :</strong> <span class="mono">${escapeHtml(data.id)}</span></div>
+          <div><strong>Fichier :</strong> ${escapeHtml(data.fichier_nom || "—")}</div>
+          <div><strong>Statut :</strong> <span class="mono">${escapeHtml(data.statut || "—")}</span></div>
+          <div><strong>Créé le :</strong> ${escapeHtml(data.created_at || "—")}</div>
+        `;
 
-          const rawText = (data.texte_ocr || "").trim();
-          const highlights = buildHighlightsFromDB(data);
-          renderHighlightsBox(data, highlights);
+        renderHighlightsBox(data);
 
-          textContent.innerHTML = highlightText(rawText || "⚠️ Aucun texte.", highlights);
+        const rawText = (data.texte_ocr || "").trim();
+        const highlights = buildHighlightsFromDB(data);
+        textContent.innerHTML = highlightText(rawText || "⚠️ Aucun texte.", highlights);
 
-          textModal.style.display = "flex";
-          document.body.style.overflow = "hidden"; // bloque le scroll derrière
-        } catch (e) {
-          setMsg("err", "Erreur lecture texte: " + (e?.message || e));
-        }
+        // ✅ Important : la modale peut être réutilisée pour plusieurs factures
+        textModal.style.display = "flex";
       }
 
-      // initial render
       render();
     }
   </script>
-
-  <!-- ✅ MODALE -->
-  <div id="textModal">
-    <div class="modalBox" id="modalBox">
-      <div style="display:flex; align-items:center; justify-content:space-between; padding:12px 14px; border-bottom:1px solid #eee;">
-        <strong>🧾 Texte extrait (surligné)</strong>
-        <div style="display:flex; gap:8px;">
-          <button class="btn" id="copyTextBtn">📋 Copier</button>
-          <button class="btn" id="closeTextBtn">✖ Fermer</button>
-        </div>
-      </div>
-      <div style="padding:12px 14px; overflow:auto;">
-        <div class="muted" id="textMeta" style="margin-bottom:10px;"></div>
-        <div id="hlBox" class="hlBox"></div>
-        <div id="textContent" style="
-          white-space:pre-wrap; word-break:break-word;
-          background:#fafafa; border:1px solid #eee; border-radius:12px;
-          padding:12px; font-size:13px; line-height:1.35;"></div>
-      </div>
-    </div>
-  </div>
 </body>
 </html>
