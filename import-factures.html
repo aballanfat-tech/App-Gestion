@@ -59,23 +59,135 @@
     .tablePdf th { background:#f7f7f7; font-size:12px; text-transform:uppercase; letter-spacing:.03em; }
     .rowDebours td { background:#fff7d6; font-weight:600; }
 
-    /* ✅ Sous-trajets */
-    .subTripsWrap { display:none; margin-top:8px; }
-    .subTripsWrap.open { display:block; }
-    .subTripsTable {
-      width:100%;
-      border-collapse: collapse;
+    /* ✅ Sous-trajets UI */
+    .subTripsWrap {
+      display:none;
+      padding:10px 12px;
+      background:#fafafa;
       border:1px solid #eee;
       border-radius:12px;
+      margin:8px 0 12px 0;
+    }
+    .subTripsWrap.open { display:block; }
+    .subTripsTitle { font-weight:700; margin-bottom:8px; }
+    .subTable {
+      width:100%;
+      border-collapse:collapse;
+      font-size:12px;
+      background:#fff;
+      border:1px solid #eee;
+      border-radius:10px;
       overflow:hidden;
-      margin-top:8px;
-      background:#fafafa;
+    }
+    .subTable th, .subTable td {
+      border-bottom:1px solid #eee;
+      padding:6px 8px;
+      vertical-align:top;
+    }
+    .subTable th {
+      background:#f7f7f7;
+      font-size:11px;
+      text-transform:uppercase;
+      letter-spacing:.03em;
+      color:#666;
+    }
+    .btnSmall {
+      border:1px solid #ddd;
+      background:#fff;
+      padding:6px 8px;
+      border-radius:10px;
+      cursor:pointer;
       font-size:12px;
     }
-    .subTripsTable th, .subTripsTable td { padding:7px 8px; border-bottom:1px solid #eee; }
-    .subTripsTable th { background:#f2f2f2; font-size:11px; text-transform:uppercase; letter-spacing:.03em; color:#666; }
-    .subPill { display:inline-block; font-size:11px; padding:3px 7px; border:1px solid #ddd; border-radius:999px; background:#fff; }
-    .btnMini { padding:6px 8px; font-size:12px; border-radius:9px; }
+    .btnSmall:disabled { opacity:.5; cursor:not-allowed; }
+
+    /* ✅ TRI 3 DESTINATIONS */
+    .triWrap {
+      margin-top:12px;
+      padding:12px;
+      background:#fff;
+      border:1px solid #eee;
+      border-radius:12px;
+    }
+    .triTitle { font-weight:800; margin-bottom:10px; }
+    .triCols {
+      display:grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap:10px;
+    }
+    .triCol {
+      border:1px solid #e5e5e5;
+      border-radius:12px;
+      padding:10px;
+      background:#fafafa;
+      min-height:160px;
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+    }
+    .triHead {
+      display:flex;
+      gap:8px;
+      align-items:center;
+      justify-content:space-between;
+    }
+    .triName {
+      width:100%;
+      border:1px solid #ddd;
+      border-radius:10px;
+      padding:7px 8px;
+      font-size:12px;
+      background:#fff;
+    }
+    .triDrop {
+      flex:1;
+      border:2px dashed #cfcfcf;
+      border-radius:12px;
+      padding:8px;
+      background:#fff;
+      min-height:90px;
+    }
+    .triDrop.dragOver { border-color:#333; background:#f8f8ff; }
+    .triItem {
+      display:flex;
+      justify-content:space-between;
+      align-items:flex-start;
+      gap:8px;
+      border:1px solid #eee;
+      border-radius:10px;
+      padding:7px 8px;
+      background:#fff;
+      cursor:grab;
+      user-select:none;
+    }
+    .triItem .left { display:flex; flex-direction:column; gap:2px; }
+    .triItem .h { font-weight:800; font-size:12px; }
+    .triItem .t { font-size:12px; color:#333; }
+    .triItem .p { font-size:12px; color:#666; white-space:nowrap; }
+    .triItem .rm { border:1px solid #ddd; background:#fff; border-radius:10px; padding:4px 6px; cursor:pointer; font-size:11px; }
+    .triFooter {
+      margin-top:10px;
+      display:flex;
+      gap:8px;
+      flex-wrap:wrap;
+      align-items:center;
+      justify-content:space-between;
+    }
+    .triPrices {
+      display:flex;
+      gap:8px;
+      flex-wrap:wrap;
+      align-items:center;
+    }
+    .triPrices input {
+      width:110px;
+      border:1px solid #ddd;
+      border-radius:10px;
+      padding:7px 8px;
+      font-size:12px;
+      background:#fff;
+    }
+    .triNote { font-size:12px; color:#666; }
   </style>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
@@ -85,7 +197,7 @@
 <header>
   <div style="display:flex; align-items:center; gap:10px;">
     <button class="btn" id="backBtn">⬅️ Retour</button>
-    <strong>📤 Import Factures (V2.3)</strong>
+    <strong>📤 Import Factures (V2.4 – Tri 3 Destinations)</strong>
   </div>
 
   <div class="authBox">
@@ -99,8 +211,8 @@
 
 <main>
   <div class="notice">
-    <div><strong>Objectif :</strong> extraction tableau stable + données propres + <strong>sous-trajets détectés</strong> (heure / texte / pax).</div>
-    <div class="muted small">✅ V2.3 • ✅ Sous-trajets viewer • ✅ Heure auto • ✅ Client clean • ✅ Date service • ✅ PU arrondi</div>
+    <div><strong>But :</strong> tu répartis manuellement les sous-trajets dans 3 destinations, puis tu saisis le prix par destination.</div>
+    <div class="muted small">✅ V2.4 • ✅ Drag&Drop tri 3 destinations • ✅ Save dans donnees_brutes.lines[].tri</div>
   </div>
 
   <div id="globalMsg" class="msg warn" style="display:none; margin-bottom:14px;"></div>
@@ -151,7 +263,7 @@
     width:min(1100px, 96vw); max-height:88vh; background:#fff; border-radius:14px;
     border:1px solid #e5e5e5; overflow:hidden; display:flex; flex-direction:column;">
     <div style="display:flex; align-items:center; justify-content:space-between; padding:12px 14px; border-bottom:1px solid #eee;">
-      <strong>🧾 Viewer (Texte + Tableau)</strong>
+      <strong>🧾 Viewer (Texte + Tableau + Tri)</strong>
       <div style="display:flex; gap:8px;">
         <button class="btn" id="copyTextBtn">📋 Copier</button>
         <button class="btn" id="closeTextBtn">✖ Fermer</button>
@@ -224,6 +336,11 @@
 
   document.getElementById("backBtn").onclick = () => window.location.href = "index.html";
 
+  // Viewer context
+  let viewerFactureId = null;
+  let viewerDonneesBrutes = null;
+  let viewerServiceLines = []; // structured lines array (type service)
+
   // ------------------------------------------------------------
   // UI Helpers
   // ------------------------------------------------------------
@@ -262,6 +379,9 @@
     textContent.innerHTML = "";
     tableContent.innerHTML = "";
     hlBox.innerHTML = "";
+    viewerFactureId = null;
+    viewerDonneesBrutes = null;
+    viewerServiceLines = [];
   }
   closeTextBtn.onclick = closeModal;
   textModal.addEventListener("click", (e) => { if (e.target === textModal) closeModal(); });
@@ -278,17 +398,6 @@
   }
   tabTextBtn.onclick = () => setTab("text");
   tabTableBtn.onclick = () => setTab("table");
-
-  // ✅ Toggle sous-trajets (event delegation dans le modal)
-  tableContent.addEventListener("click", (e) => {
-    const btn = e.target.closest("[data-subtoggle]");
-    if (!btn) return;
-    const id = btn.getAttribute("data-subtoggle");
-    const wrap = document.getElementById(id);
-    if (!wrap) return;
-    wrap.classList.toggle("open");
-    btn.textContent = wrap.classList.contains("open") ? "🔼 Sous-trajets" : "🔽 Sous-trajets";
-  });
 
   // ------------------------------------------------------------
   // Highlight stable
@@ -443,42 +552,33 @@
     return { source_lieu: source, destination_lieu: destination };
   }
 
-  // ✅ V2.3 — Sous-trajets: extrait blocs "16h50 ... x 43 pers"
+  // ------------------------------------------------------------
+  // ✅ Extract sub-trips (hours chunks)
+  // ------------------------------------------------------------
   function extractSubTrips(desc) {
     if (!desc) return [];
     const txt = String(desc).replace(/\s+/g, " ").trim();
-
-    // Si aucune heure, aucun sous-trajet
-    if (!/\b\d{1,2}h\d{2}\b/.test(txt)) return [];
-
-    const trips = [];
     const re = /(\b\d{1,2}h\d{2}\b)\s+(.+?)(?=(\b\d{1,2}h\d{2}\b)|$)/g;
+    const trips = [];
     let m;
 
     while ((m = re.exec(txt)) !== null) {
       const heure = m[1];
       let chunk = (m[2] || "").replace(/\s+/g, " ").trim();
 
-      // pax : "x 43 pers" ou "43 pax"
       let pax = null;
       const mp = chunk.match(/\bx?\s*(\d{1,3})\s*(pax|pers|personnes)\b/i);
       if (mp) pax = parseInt(mp[1], 10);
-
-      // nettoyage chunk : retirer pax
       if (mp) chunk = chunk.replace(mp[0], "").replace(/\s+/g, " ").trim();
-
-      // retrait ponctuation inutile
-      chunk = chunk.replace(/^[,;:\-]+/, "").replace(/[,;:\-]+$/, "").trim();
+      if (chunk.length < 2) chunk = "";
 
       trips.push({ heure, texte: chunk, pax });
     }
-
-    // Heuristique: si on n'a qu’un seul bloc, ce n’est pas très utile -> on peut quand même garder.
     return trips;
   }
 
   // ------------------------------------------------------------
-  // Client clean (V2.3 = même que V2.2.1)
+  // Client clean
   // ------------------------------------------------------------
   function cleanClientName(raw) {
     if (!raw) return null;
@@ -492,11 +592,12 @@
 
     s = s.replace(/\b(CS|BP)\b[\s\S]*$/i, "").trim();
     s = s.replace(/\bCEDEX\b[\s\S]*$/i, "").trim();
+
     s = s.replace(/\b\d+\s*(bis|ter)?\s+(rue|route|avenue|av\.?|allée|allee|chemin|cours|boulevard|bd|place|impasse|za|zone|montée|montee|mont|quai|passage)\b[\s\S]*$/i, "").trim();
+
     s = s.replace(/\b\d{5}\b[\s\S]*$/g, "").trim();
     s = s.replace(/\b(France|Belgique|Suisse|Luxembourg)\b[\s\S]*$/i, "").trim();
 
-    // Remove duplicated halves if identical
     const parts = s.split(" ");
     if (parts.length > 2) {
       const mid = Math.floor(parts.length / 2);
@@ -510,10 +611,10 @@
   }
 
   // ------------------------------------------------------------
-  // Parse facture header/totaux
+  // Parse invoice fields
   // ------------------------------------------------------------
   function parseInvoiceText(fullText) {
-    const out = { version:"parser_table_v23", parsed_at:new Date().toISOString(), fields:{}, matches:[] };
+    const out = { version:"parser_table_v24", parsed_at:new Date().toISOString(), fields:{}, matches:[] };
     const t = fullText || "";
 
     const mFact = t.match(/\bFacture\s+([A-Z]{2,6}-\d{3,4}-\d{2,})\b/i) || t.match(/\bFACT-\d{4}-\d{2,}\b/);
@@ -565,7 +666,7 @@
   }
 
   // ------------------------------------------------------------
-  // Table detector (identique V2.2.1)
+  // Table detector (identique V2.3)
   // ------------------------------------------------------------
   function groupItemsIntoLines(items, baseTolerance = 3.2) {
     const sorted = [...items].sort((a,b) => b.y - a.y);
@@ -655,7 +756,7 @@
       if (m) {
         const money = m[1].trim() + " €";
         row.total = money;
-        row.tva = row.tva.replace(m[0], "").replace(/\s+/g," ").trim();
+        row.tva = row.tva.replace(m[0], "").replace(/\s+/g, " ").trim();
       }
     }
     if (row.tva) {
@@ -779,63 +880,241 @@
     };
   }
 
-  // ✅ V2.3: rendu tableau + sous-trajets dans la cellule Description
-  function renderPdfTableHtml(services, debours, hasReduc) {
+  // ------------------------------------------------------------
+  // ✅ V2.4 – TRI UI helpers
+  // ------------------------------------------------------------
+  function triDefault() {
+    return {
+      names: ["Destination 1", "Destination 2", "Destination 3"],
+      buckets: [[], [], []],
+      prices: { a:null, b:null, c:null }
+    };
+  }
+
+  function safeParseFloat(v) {
+    if (v == null) return null;
+    const s = String(v).replace(",", ".").replace(/[^0-9.]/g,"").trim();
+    if (!s) return null;
+    const n = parseFloat(s);
+    return Number.isFinite(n) ? n : null;
+  }
+
+  function renderTriUI(serviceIndex, lineObj) {
+    const tri = (lineObj && lineObj.tri) ? lineObj.tri : triDefault();
+
+    const nameA = tri.names?.[0] || "Destination 1";
+    const nameB = tri.names?.[1] || "Destination 2";
+    const nameC = tri.names?.[2] || "Destination 3";
+
+    const priceA = tri.prices?.a != null ? tri.prices.a : "";
+    const priceB = tri.prices?.b != null ? tri.prices.b : "";
+    const priceC = tri.prices?.c != null ? tri.prices.c : "";
+
+    return `
+      <div class="triWrap" data-tri-wrap="${serviceIndex}">
+        <div class="triTitle">🧭 Tri 3 destinations (glisse les sous-trajets)</div>
+
+        <div class="triCols">
+          ${renderTriCol(serviceIndex, 0, nameA, tri.buckets?.[0] || [])}
+          ${renderTriCol(serviceIndex, 1, nameB, tri.buckets?.[1] || [])}
+          ${renderTriCol(serviceIndex, 2, nameC, tri.buckets?.[2] || [])}
+        </div>
+
+        <div class="triFooter">
+          <div class="triPrices">
+            <div class="muted small">Prix :</div>
+            <input placeholder="Prix A" data-tri-price="a" data-idx="${serviceIndex}" value="${escapeHtml(priceA)}">
+            <input placeholder="Prix B" data-tri-price="b" data-idx="${serviceIndex}" value="${escapeHtml(priceB)}">
+            <input placeholder="Prix C" data-tri-price="c" data-idx="${serviceIndex}" value="${escapeHtml(priceC)}">
+            <span class="triNote" id="triSum-${serviceIndex}"></span>
+          </div>
+
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <button class="btnSmall" data-action="tri-copy" data-idx="${serviceIndex}">📋 Copier tri</button>
+            <button class="btnSmall" data-action="tri-save" data-idx="${serviceIndex}">💾 Sauvegarder</button>
+            <button class="btnSmall" data-action="tri-reset" data-idx="${serviceIndex}">🧹 Reset</button>
+          </div>
+        </div>
+
+        <div class="muted small" style="margin-top:6px;">
+          💡 Le tri est sauvegardé dans <span class="mono">factures.donnees_brutes.lines[].tri</span>. Aucun schéma DB à modifier.
+        </div>
+      </div>
+    `;
+  }
+
+  function renderTriCol(serviceIndex, bucketIndex, name, items) {
+    const listHtml = (items || []).map((it, k) => renderTriItem(serviceIndex, bucketIndex, it, k)).join("");
+    return `
+      <div class="triCol" data-tri-col="${bucketIndex}" data-idx="${serviceIndex}">
+        <div class="triHead">
+          <input class="triName" data-tri-name="${bucketIndex}" data-idx="${serviceIndex}" value="${escapeHtml(name)}">
+        </div>
+        <div class="triDrop" data-tri-drop="${bucketIndex}" data-idx="${serviceIndex}">
+          ${listHtml || `<div class="muted small">Dépose ici…</div>`}
+        </div>
+      </div>
+    `;
+  }
+
+  function renderTriItem(serviceIndex, bucketIndex, it, k) {
+    const payload = encodeURIComponent(JSON.stringify(it));
+    return `
+      <div class="triItem" draggable="true"
+           data-tri-item="1"
+           data-idx="${serviceIndex}"
+           data-bucket="${bucketIndex}"
+           data-payload="${payload}">
+        <div class="left">
+          <div class="h">${escapeHtml(it.heure || "")}</div>
+          <div class="t">${escapeHtml(it.texte || "")}</div>
+        </div>
+        <div style="display:flex; gap:6px; align-items:center;">
+          <div class="p">${it.pax != null ? escapeHtml(String(it.pax))+" pax" : ""}</div>
+          <button class="rm" data-action="tri-remove" data-idx="${serviceIndex}" data-bucket="${bucketIndex}" data-k="${k}">✖</button>
+        </div>
+      </div>
+    `;
+  }
+
+  function computeTriSum(serviceIndex) {
+    const wrap = document.querySelector(`[data-tri-wrap="${serviceIndex}"]`);
+    if (!wrap) return;
+    const a = safeParseFloat(wrap.querySelector(`[data-tri-price="a"][data-idx="${serviceIndex}"]`)?.value);
+    const b = safeParseFloat(wrap.querySelector(`[data-tri-price="b"][data-idx="${serviceIndex}"]`)?.value);
+    const c = safeParseFloat(wrap.querySelector(`[data-tri-price="c"][data-idx="${serviceIndex}"]`)?.value);
+    const sum = (a||0)+(b||0)+(c||0);
+    const el = document.getElementById(`triSum-${serviceIndex}`);
+    if (el) el.textContent = `Total: ${sum ? sum.toFixed(2) : "0.00"} €`;
+  }
+
+  function getTriStateFromDOM(serviceIndex) {
+    const wrap = document.querySelector(`[data-tri-wrap="${serviceIndex}"]`);
+    if (!wrap) return triDefault();
+
+    const names = [0,1,2].map(i => wrap.querySelector(`[data-tri-name="${i}"][data-idx="${serviceIndex}"]`)?.value || `Destination ${i+1}`);
+
+    const prices = {
+      a: safeParseFloat(wrap.querySelector(`[data-tri-price="a"][data-idx="${serviceIndex}"]`)?.value),
+      b: safeParseFloat(wrap.querySelector(`[data-tri-price="b"][data-idx="${serviceIndex}"]`)?.value),
+      c: safeParseFloat(wrap.querySelector(`[data-tri-price="c"][data-idx="${serviceIndex}"]`)?.value),
+    };
+
+    const buckets = [0,1,2].map(b => {
+      const drop = wrap.querySelector(`[data-tri-drop="${b}"][data-idx="${serviceIndex}"]`);
+      if (!drop) return [];
+      const nodes = drop.querySelectorAll(`[data-tri-item="1"][data-idx="${serviceIndex}"][data-bucket="${b}"]`);
+      const list = [];
+      nodes.forEach(n => {
+        const payload = n.getAttribute("data-payload");
+        if (!payload) return;
+        try { list.push(JSON.parse(decodeURIComponent(payload))); } catch {}
+      });
+      return list;
+    });
+
+    return { names, buckets, prices };
+  }
+
+  function setTriToLine(serviceIndex, triState) {
+    // serviceIndex maps to viewerServiceLines index
+    if (!viewerServiceLines[serviceIndex]) return;
+    viewerServiceLines[serviceIndex].tri = triState;
+
+    // also update in donnees_brutes.lines (same object reference if we built it from there)
+    // no-op if already reference.
+  }
+
+  // ------------------------------------------------------------
+  // Render services table + subtrips + tri
+  // ------------------------------------------------------------
+  function renderSubTripsTable(trips) {
+    if (!trips || trips.length === 0) {
+      return `<div class="muted small">Aucun sous-trajet détecté.</div>`;
+    }
+    let html = `<table class="subTable">
+      <thead><tr><th>Heure</th><th>Texte</th><th>Pax</th></tr></thead><tbody>`;
+    for (const t of trips) {
+      const payload = encodeURIComponent(JSON.stringify(t));
+      html += `<tr>
+        <td class="mono">${escapeHtml(t.heure || "")}</td>
+        <td>${escapeHtml(t.texte || "")}</td>
+        <td>${t.pax != null ? escapeHtml(String(t.pax)) : ""}</td>
+      </tr>`;
+      // note: drag uses triItem, not table row; we keep as readable only
+    }
+    html += `</tbody></table>`;
+    return html;
+  }
+
+  function renderPdfTableHtmlWithTri(services, debours, hasReduc) {
     const showReduc = !!hasReduc || services.some(r => (r.reduc || "").includes("%"));
 
     let html = `<table class="tablePdf">
       <thead><tr>
-        <th>Type</th><th>Description</th><th>PU HT</th><th>Qté</th><th>TVA</th>${showReduc ? "<th>Réduction</th>" : ""}<th>Total HT</th>
+        <th>Type</th><th>Description</th><th>PU HT</th><th>Qté</th><th>TVA</th>${showReduc ? "<th>Réduction</th>" : ""}<th>Total HT</th><th></th>
       </tr></thead><tbody>`;
 
     services.forEach((r, idx) => {
-      const id = `subTrips_${idx}_${Math.random().toString(16).slice(2)}`;
-      const trips = extractSubTrips(r.desc);
-
-      let descHtml = `<div>${escapeHtml(r.desc)}</div>`;
-
-      if (trips.length > 0) {
-        descHtml += `
-          <div style="margin-top:6px;">
-            <button class="btn btnMini" data-subtoggle="${id}">🔽 Sous-trajets</button>
-            <span class="subPill" style="margin-left:8px;">${trips.length} détecté(s)</span>
-          </div>
-          <div id="${id}" class="subTripsWrap">
-            <table class="subTripsTable">
-              <thead>
-                <tr><th>Heure</th><th>Destination / Texte</th><th>Pax</th></tr>
-              </thead>
-              <tbody>
-                ${trips.map(t => `
-                  <tr>
-                    <td><span class="subPill">${escapeHtml(t.heure || "")}</span></td>
-                    <td>${escapeHtml(t.texte || "")}</td>
-                    <td>${t.pax != null ? `<span class="subPill">${escapeHtml(String(t.pax))}</span>` : `<span class="muted">—</span>`}</td>
-                  </tr>
-                `).join("")}
-              </tbody>
-            </table>
-            <div class="muted small" style="margin-top:6px;">
-              💡 Ces sous-trajets sont informatifs : tu pourras ensuite les trier/ventiler et définir les prix toi-même.
-            </div>
-          </div>
-        `;
-      }
+      const subTrips = extractSubTrips(r.desc || "");
+      const canToggle = subTrips.length > 0;
+      const lineObj = viewerServiceLines[idx] || null;
+      const hasTri = lineObj?.tri && (lineObj.tri.buckets?.some(b=>b?.length) || lineObj.tri.prices);
 
       html += `<tr>
         <td>${escapeHtml(r.type)}</td>
-        <td class="desc">${descHtml}</td>
+        <td class="desc">${escapeHtml(r.desc)}</td>
         <td>${escapeHtml(r.pu)}</td>
         <td>${escapeHtml(r.qty)}</td>
         <td>${escapeHtml(r.tva)}</td>
         ${showReduc ? `<td>${escapeHtml(r.reduc || "")}</td>` : ""}
         <td>${escapeHtml(r.total)}</td>
+        <td style="white-space:nowrap;">
+          <button class="btnSmall" data-action="toggle-sub" data-idx="${idx}" ${canToggle ? "" : "disabled"}>🔽 Sous-trajets</button>
+          <button class="btnSmall" data-action="toggle-tri" data-idx="${idx}" ${canToggle ? "" : "disabled"}>🧭 Tri</button>
+          ${hasTri ? `<div class="muted small">✅ tri</div>` : ``}
+        </td>
+      </tr>`;
+
+      html += `<tr>
+        <td colspan="${showReduc ? 8 : 7}">
+          <div class="subTripsWrap" id="subWrap-${idx}">
+            <div class="subTripsTitle">🧩 Sous-trajets détectés</div>
+            ${renderSubTripsTable(subTrips)}
+            <div style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;">
+              <button class="btnSmall" data-action="copy-sub" data-idx="${idx}" ${canToggle ? "" : "disabled"}>📋 Copier sous-trajets</button>
+              <span class="muted small">Tu peux ensuite les glisser dans le tri 3 destinations.</span>
+            </div>
+
+            <div class="subTripsTitle" style="margin-top:12px;">🧲 Sous-trajets (draggables)</div>
+            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+              ${subTrips.map((t) => {
+                const payload = encodeURIComponent(JSON.stringify(t));
+                return `
+                  <div class="triItem" draggable="true"
+                       data-drag-source="sub"
+                       data-payload="${payload}">
+                    <div class="left">
+                      <div class="h">${escapeHtml(t.heure || "")}</div>
+                      <div class="t">${escapeHtml(t.texte || "")}</div>
+                    </div>
+                    <div class="p">${t.pax != null ? escapeHtml(String(t.pax))+" pax" : ""}</div>
+                  </div>
+                `;
+              }).join("")}
+            </div>
+
+            <div class="subTripsWrap" id="triWrap-${idx}" style="display:none; margin-top:12px;">
+              ${renderTriUI(idx, lineObj)}
+            </div>
+          </div>
+        </td>
       </tr>`;
     });
 
     if (debours.length > 0) {
-      html += `<tr class="rowDebours"><td colspan="${showReduc ? 7 : 6}">Débours</td></tr>`;
-      for (const d of debours) html += `<tr class="rowDebours"><td colspan="${showReduc ? 7 : 6}">${escapeHtml(d)}</td></tr>`;
+      html += `<tr class="rowDebours"><td colspan="${showReduc ? 8 : 7}">Débours</td></tr>`;
+      for (const d of debours) html += `<tr class="rowDebours"><td colspan="${showReduc ? 8 : 7}">${escapeHtml(d)}</td></tr>`;
     }
 
     html += `</tbody></table>`;
@@ -843,9 +1122,7 @@
   }
 
   // ------------------------------------------------------------
-  // Parse LINES from TABLE rows -> DB + matches
-  // ✅ V2.3: heure_service = première heure trouvée si absente
-  // ✅ V2.3: stock sub_trips (informatif) dans lines + flags
+  // ✅ Parse lines from table rows (heure auto + sub_trips)
   // ------------------------------------------------------------
   function parseLinesFromTable(tablePages, parserOut) {
     const lines = [];
@@ -863,22 +1140,19 @@
       const desc = (r.desc || "").trim();
       let dateRaw = null, heure = null, cleanDesc = desc;
 
-      // date seule
       const mDateOnly = desc.match(/^(\d{2}\/\d{2}\/\d{4})\s*:\s*(.*)$/);
       if (mDateOnly) {
         dateRaw = mDateOnly[1];
         cleanDesc = (mDateOnly[2] || "").trim();
       }
 
-      // date + heure
-      const mDH = desc.match(/(\d{2}\/\d{2}\/\d{4})\s*:\s*([0-9]{1,2}h[0-9]{2})\s*(.*)/);
+      const mDH = desc.match(/(\d{2}\/\d{2}\/\d{4})\s*:\s*([0-9]{1,2}h[0-9]{0,2})\s*(.*)/);
       if (mDH) {
         dateRaw = mDH[1];
         heure = mDH[2];
         cleanDesc = (mDH[3] || "").trim() || cleanDesc;
       }
 
-      // ✅ V2.3: si pas d'heure détectée, prendre la première heure trouvée dans cleanDesc
       if (!heure) {
         const mh = cleanDesc.match(/\b(\d{1,2}h\d{2})\b/);
         if (mh) heure = mh[1];
@@ -894,8 +1168,7 @@
       const reduc = parsePercent(r.reduc) || null;
       const total = normalizeNumber(r.total);
 
-      // ✅ V2.3: sous-trajets informatifs
-      const subTrips = extractSubTrips(cleanDesc);
+      const sub_trips = extractSubTrips(cleanDesc);
 
       const obj = {
         type: "service",
@@ -911,9 +1184,10 @@
         tva,
         reduction_percent: reduc,
         prix_total_ht: total,
-        sub_trips: subTrips, // informatif
         confidence: "high",
-        source_text: JSON.stringify(r)
+        source_text: JSON.stringify(r),
+        sub_trips,
+        tri: null
       };
       lines.push(obj);
 
@@ -928,25 +1202,25 @@
       const mAmt = raw.match(/([0-9\s.,]+)\s*€\s*$/);
       const amountRaw = mAmt ? mAmt[1].trim() : null;
       const amount = amountRaw ? normalizeNumber(amountRaw) : null;
-      const desc2 = amountRaw ? raw.replace(mAmt[0], "").replace(/\s+/g," ").trim() : raw.trim();
+      const desc = amountRaw ? raw.replace(mAmt[0], "").replace(/\s+/g," ").trim() : raw.trim();
 
       lines.push({
         type: "debours",
         ligne_numero: idx++,
-        description_service: desc2,
+        description_service: desc,
         prix_total_ht: amount,
         confidence: "high",
         source_text: raw
       });
 
-      if (parserOut?.matches) parserOut.matches.push({ label:"debours_desc", value: desc2, raw: raw });
+      if (parserOut?.matches) parserOut.matches.push({ label:"debours_desc", value: desc, raw: raw });
     }
 
     return lines;
   }
 
   // ------------------------------------------------------------
-  // Render list
+  // Render file list
   // ------------------------------------------------------------
   function render() {
     selectedCount.textContent = String(state.files.length);
@@ -988,27 +1262,18 @@
     }
   }
 
-  // ✅ Event delegation (boutons stables)
   filesTbody.addEventListener("click", async (e) => {
     const btn = e.target.closest("button[data-action]");
     if (!btn) return;
-
     const idx = Number(btn.getAttribute("data-index"));
     const action = btn.getAttribute("data-action");
     if (Number.isNaN(idx) || idx < 0 || idx >= state.files.length) return;
 
     try {
-      if (action === "remove") {
-        state.files.splice(idx, 1);
-        render();
-        return;
-      }
-      if (action === "view") {
-        await openViewer(idx);
-        return;
-      }
+      if (action === "remove") { state.files.splice(idx, 1); render(); return; }
+      if (action === "view") { await openViewer(idx); return; }
     } catch (err) {
-      console.error("Button action failed:", err);
+      console.error(err);
       setMsg("err", "Erreur bouton: " + (err?.message || err));
     }
   });
@@ -1055,6 +1320,207 @@
   }
 
   // ------------------------------------------------------------
+  // ✅ TABLE/VIEWER events: toggle sub, toggle tri, copy sub, tri drag/drop, tri save
+  // ------------------------------------------------------------
+  let dragPayload = null;
+
+  tableContent.addEventListener("dragstart", (e) => {
+    const item = e.target.closest(".triItem[draggable='true']");
+    if (!item) return;
+    const payload = item.getAttribute("data-payload");
+    if (!payload) return;
+    dragPayload = payload;
+    e.dataTransfer.setData("text/plain", payload);
+  });
+
+  tableContent.addEventListener("dragend", () => {
+    dragPayload = null;
+  });
+
+  tableContent.addEventListener("dragover", (e) => {
+    const drop = e.target.closest("[data-tri-drop]");
+    if (!drop) return;
+    e.preventDefault();
+    drop.classList.add("dragOver");
+  });
+
+  tableContent.addEventListener("dragleave", (e) => {
+    const drop = e.target.closest("[data-tri-drop]");
+    if (!drop) return;
+    drop.classList.remove("dragOver");
+  });
+
+  tableContent.addEventListener("drop", (e) => {
+    const drop = e.target.closest("[data-tri-drop]");
+    if (!drop) return;
+    e.preventDefault();
+    drop.classList.remove("dragOver");
+
+    const serviceIndex = Number(drop.getAttribute("data-idx"));
+    const bucketIndex = Number(drop.getAttribute("data-tri-drop"));
+    if (Number.isNaN(serviceIndex) || Number.isNaN(bucketIndex)) return;
+
+    const payload = e.dataTransfer.getData("text/plain") || dragPayload;
+    if (!payload) return;
+
+    let obj = null;
+    try { obj = JSON.parse(decodeURIComponent(payload)); } catch { return; }
+
+    // insert into DOM list as triItem
+    const wrap = document.querySelector(`[data-tri-wrap="${serviceIndex}"]`);
+    if (!wrap) return;
+
+    // remove placeholder text if exists
+    const placeholder = drop.querySelector(".muted");
+    if (placeholder) placeholder.remove();
+
+    // add new element
+    const list = drop.querySelectorAll(".triItem").length;
+    drop.insertAdjacentHTML("beforeend", renderTriItem(serviceIndex, bucketIndex, obj, list));
+  });
+
+  tableContent.addEventListener("input", (e) => {
+    const t = e.target;
+    if (t.matches("[data-tri-price]")) {
+      const idx = Number(t.getAttribute("data-idx"));
+      computeTriSum(idx);
+    }
+  });
+
+  tableContent.addEventListener("click", async (e) => {
+    const btn = e.target.closest("button[data-action]");
+    if (!btn) return;
+
+    const action = btn.getAttribute("data-action");
+    const idx = Number(btn.getAttribute("data-idx"));
+    if (Number.isNaN(idx)) return;
+
+    if (action === "toggle-sub") {
+      const wrap = document.getElementById(`subWrap-${idx}`);
+      if (wrap) wrap.classList.toggle("open");
+      return;
+    }
+
+    if (action === "toggle-tri") {
+      const tri = document.getElementById(`triWrap-${idx}`);
+      if (tri) tri.style.display = (tri.style.display === "none" ? "block" : "none");
+      computeTriSum(idx);
+      return;
+    }
+
+    if (action === "copy-sub") {
+      const sub = document.getElementById(`subWrap-${idx}`);
+      if (!sub) return;
+      const chips = sub.querySelectorAll(".triItem[data-drag-source='sub']");
+      const lines = ["Heure\tTexte\tPax"];
+      chips.forEach(c => {
+        try {
+          const obj = JSON.parse(decodeURIComponent(c.getAttribute("data-payload")));
+          lines.push(`${obj.heure||""}\t${obj.texte||""}\t${obj.pax!=null?obj.pax:""}`);
+        } catch {}
+      });
+      await navigator.clipboard.writeText(lines.join("\n"));
+      btn.textContent = "✅ Copié";
+      setTimeout(() => btn.textContent = "📋 Copier sous-trajets", 900);
+      return;
+    }
+
+    if (action === "tri-remove") {
+      const bucket = Number(btn.getAttribute("data-bucket"));
+      const k = Number(btn.getAttribute("data-k"));
+      const wrap = document.querySelector(`[data-tri-wrap="${idx}"]`);
+      if (!wrap) return;
+      const drop = wrap.querySelector(`[data-tri-drop="${bucket}"][data-idx="${idx}"]`);
+      if (!drop) return;
+      const items = drop.querySelectorAll(`.triItem[data-idx="${idx}"][data-bucket="${bucket}"]`);
+      if (items[k]) items[k].remove();
+      if (drop.querySelectorAll(".triItem").length === 0) drop.innerHTML = `<div class="muted small">Dépose ici…</div>`;
+      return;
+    }
+
+    if (action === "tri-reset") {
+      const wrap = document.querySelector(`[data-tri-wrap="${idx}"]`);
+      if (!wrap) return;
+      // reset names
+      [0,1,2].forEach(i => {
+        const inp = wrap.querySelector(`[data-tri-name="${i}"][data-idx="${idx}"]`);
+        if (inp) inp.value = `Destination ${i+1}`;
+      });
+      // reset prices
+      ["a","b","c"].forEach(k => {
+        const inp = wrap.querySelector(`[data-tri-price="${k}"][data-idx="${idx}"]`);
+        if (inp) inp.value = "";
+      });
+      // reset drops
+      [0,1,2].forEach(b => {
+        const d = wrap.querySelector(`[data-tri-drop="${b}"][data-idx="${idx}"]`);
+        if (d) d.innerHTML = `<div class="muted small">Dépose ici…</div>`;
+      });
+      computeTriSum(idx);
+      // reset memory
+      setTriToLine(idx, triDefault());
+      return;
+    }
+
+    if (action === "tri-copy") {
+      const triState = getTriStateFromDOM(idx);
+      const lines = [];
+      lines.push(`Destination\tHeure\tTexte\tPax`);
+      triState.buckets.forEach((bucket, bi) => {
+        const destName = triState.names[bi] || `Destination ${bi+1}`;
+        (bucket||[]).forEach(it => {
+          lines.push(`${destName}\t${it.heure||""}\t${it.texte||""}\t${it.pax!=null?it.pax:""}`);
+        });
+      });
+      // prices
+      lines.push("");
+      lines.push(`Prix A\t${triState.prices.a!=null?triState.prices.a:""}`);
+      lines.push(`Prix B\t${triState.prices.b!=null?triState.prices.b:""}`);
+      lines.push(`Prix C\t${triState.prices.c!=null?triState.prices.c:""}`);
+
+      await navigator.clipboard.writeText(lines.join("\n"));
+      btn.textContent = "✅ Copié";
+      setTimeout(() => btn.textContent = "📋 Copier tri", 900);
+      return;
+    }
+
+    if (action === "tri-save") {
+      if (!viewerFactureId || !viewerDonneesBrutes) return setMsg("err", "Viewer sans contexte facture.");
+
+      const triState = getTriStateFromDOM(idx);
+      setTriToLine(idx, triState);
+
+      // Put tri into donnees_brutes.lines (service lines only)
+      // viewerServiceLines is subset; we update the original donnees_brutes.lines by matching ligne_numero
+      const allLines = viewerDonneesBrutes.lines || [];
+      const target = viewerServiceLines[idx];
+      if (!target) return setMsg("err", "Impossible de retrouver la ligne structurée.");
+
+      const ln = target.ligne_numero;
+      const real = allLines.find(l => l.type === "service" && l.ligne_numero === ln);
+      if (real) real.tri = triState;
+
+      try {
+        await ensureLoggedIn();
+        const { error } = await sb
+          .from("factures")
+          .update({ donnees_brutes: viewerDonneesBrutes })
+          .eq("id", viewerFactureId);
+
+        if (error) throw error;
+
+        btn.textContent = "✅ Sauvé";
+        setTimeout(() => btn.textContent = "💾 Sauvegarder", 1200);
+        setMsg("ok", "✅ Tri sauvegardé dans donnees_brutes.");
+      } catch (err) {
+        console.error(err);
+        setMsg("err", "Erreur sauvegarde tri: " + (err?.message || err));
+      }
+      return;
+    }
+  });
+
+  // ------------------------------------------------------------
   // Viewer
   // ------------------------------------------------------------
   async function openViewer(idx) {
@@ -1067,6 +1533,10 @@
       .eq("id", item.factureId)
       .single();
     if (error) return setMsg("err", "Erreur lecture: " + error.message);
+
+    viewerFactureId = data.id;
+    viewerDonneesBrutes = data.donnees_brutes || {};
+    viewerServiceLines = (viewerDonneesBrutes.lines || []).filter(l => l.type === "service");
 
     textMeta.innerHTML = `
       <div><strong>Facture ID :</strong> <span class="mono">${escapeHtml(data.id)}</span></div>
@@ -1091,8 +1561,11 @@
     }
 
     tableContent.innerHTML = (servicesAll.length || deboursAll.length)
-      ? renderPdfTableHtml(servicesAll, deboursAll, hasReduc)
+      ? renderPdfTableHtmlWithTri(servicesAll, deboursAll, hasReduc)
       : `<div class="muted">Aucun tableau détecté. Vérifie donnees_brutes.table_debug.</div>`;
+
+    // init sums
+    for (let i = 0; i < servicesAll.length; i++) computeTriSum(i);
 
     textContent.innerHTML = "<i>Chargement…</i>";
     const rawText = (data.texte_ocr || "").trim();
@@ -1103,7 +1576,7 @@
   }
 
   // ------------------------------------------------------------
-  // Upload + Extract
+  // Upload + Extract (identique logique, mais version parser v24)
   // ------------------------------------------------------------
   async function uploadAndProcessOne(item) {
     item.status = "uploading"; item.error = null; render();
@@ -1190,6 +1663,7 @@
     const { error: updErr } = await sb.from("factures").update(payload).eq("id", item.factureId);
     if (updErr) throw updErr;
 
+    // Keep inserts into existing tables
     const services = parsed.lines.filter(l => l.type === "service");
     const debours = parsed.lines.filter(l => l.type === "debours");
 
@@ -1208,11 +1682,7 @@
         tva: l.tva,
         reduction_percent: l.reduction_percent,
         prix_total_ht: l.prix_total_ht,
-        flags: {
-          confidence: l.confidence,
-          source_text: l.source_text,
-          sub_trips: l.sub_trips || [] // ✅ V2.3 informatif
-        }
+        flags: { confidence:l.confidence, source_text:l.source_text, sub_trips: l.sub_trips || [] }
       }));
 
       const { error: lfErr } = await sb.from("lignes_factures").insert(rowsLF);
