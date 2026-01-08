@@ -71,7 +71,7 @@
 <header>
   <div style="display:flex; align-items:center; gap:10px;">
     <button class="btn" id="backBtn">⬅️ Retour</button>
-    <strong>📤 Import Factures (Table detector V2 + fix boutons)</strong>
+    <strong>📤 Import Factures (Table detector V2.1 + Réduction)</strong>
   </div>
 
   <div class="authBox">
@@ -86,7 +86,7 @@
 <main>
   <div class="notice">
     <div><strong>Objectif :</strong> détecter les services dans le tableau PDF (même si header éclaté), remplir la DB et surligner les infos utiles.</div>
-    <div class="muted small">✅ Table detector V2 • ✅ fusion wrap • ✅ debug table • ✅ client sans adresse • ✅ “Voir” stable</div>
+    <div class="muted small">✅ Table detector V2.1 • ✅ fusion wrap • ✅ colonne Réduction • ✅ fix description vide (120€) • ✅ “Voir” stable</div>
   </div>
 
   <div id="globalMsg" class="msg warn" style="display:none; margin-bottom:14px;"></div>
@@ -155,7 +155,7 @@
 
       <div id="tableWrap" style="display:none;">
         <div class="muted small" style="margin-bottom:8px;">
-          Tableau reconstruit depuis X/Y PDF. Si vide, regarde le debug : donnees_brutes.table_debug.
+          Tableau reconstruit depuis X/Y PDF. Debug : donnees_brutes.table_debug.
         </div>
         <div id="tableContent" style="overflow:auto;"></div>
       </div>
@@ -380,7 +380,7 @@
   }
   function parsePercent(str) {
     if (!str) return null;
-    const m = str.match(/(\d{1,2})\s*%/);
+    const m = str.match(/(\d{1,3})\s*%/);
     return m ? parseInt(m[1], 10) : null;
   }
   function parseFrenchDateAny(dateStr) {
@@ -441,7 +441,7 @@
   // Parse facture header/totaux
   // ------------------------------------------------------------
   function parseInvoiceText(fullText) {
-    const out = { version:"parser_table_v2_fix", parsed_at:new Date().toISOString(), fields:{}, matches:[] };
+    const out = { version:"parser_table_v21_reduction", parsed_at:new Date().toISOString(), fields:{}, matches:[] };
     const t = fullText || "";
 
     const mFact = t.match(/\bFacture\s+([A-Z]{2,6}-\d{3,4}-\d{2,})\b/i) || t.match(/\bFACT-\d{4}-\d{2,}\b/);
@@ -461,7 +461,7 @@
       }
     }
 
-    const mDest = t.match(/Destinataire\s+([\s\S]+?)\s+Conditions/i);
+    const mDest = t.match(/Destinataire\s+([\s\S]+?)\s+(Conditions|Séjours|Détail|Detail)/i);
     if (mDest) {
       const rawClientBlock = mDest[1].replace(/\s+/g," ").trim();
       const clean = cleanClientName(rawClientBlock);
@@ -471,6 +471,7 @@
       }
     }
 
+    // Totaux
     const mTotals1 = t.match(/Total\s*HT\s+TVA\s*\(\s*\d+%\s*\)\s+Total\s*TTC\s+([0-9\s.,]+)\s*€?\s+([0-9\s.,]+)\s*€?\s+([0-9\s.,]+)\s*€/i);
     if (mTotals1) {
       out.fields.total_ht = normalizeNumber(mTotals1[1]);
@@ -492,7 +493,7 @@
   }
 
   // ------------------------------------------------------------
-  // ✅ TABLE DETECTOR V2 (robust)
+  // ✅ TABLE DETECTOR V2.1 (supports Réduction + fix desc vide)
   // ------------------------------------------------------------
   function groupItemsIntoLines(items, baseTolerance = 3.2) {
     const sorted = [...items].sort((a,b) => b.y - a.y);
@@ -525,6 +526,7 @@
       { key:"pu",   k:["prix","unitaire","pu"] },
       { key:"qty",  k:["quantité","quantite","qté","qte","quant"] },
       { key:"tva",  k:["tva"] },
+      { key:"reduc",k:["réduction","reduction"] },
       { key:"total",k:["total"] }
     ];
 
@@ -538,7 +540,7 @@
       }
     }
 
-    if (!best) return { found:false, xType:0, xDesc:90, xPU:360, xQty:470, xTVA:540, xTotal:610 };
+    if (!best) return { found:false, hasReduc:false, xType:0, xDesc:90, xPU:360, xQty:470, xTVA:540, xReduc:585, xTotal:650 };
 
     const header = best.line;
 
@@ -551,17 +553,23 @@
     const xPU = findX(["prix"]) ?? 360;
     const xQty = findX(["quant"]) ?? 470;
     const xTVA = findX(["tva"]) ?? 540;
+
+    const xReducMaybe = findX(["réduction","reduction"]);
+    const hasReduc = xReducMaybe != null;
+
     const xTotal = (() => {
       const totals = header.items.filter(i => i.str.toLowerCase().includes("total"));
       if (totals.length) return totals[totals.length - 1].x;
-      return 610;
+      return 650;
     })();
 
-    return { found:true, headerY: header.y, xType:0, xDesc, xPU, xQty, xTVA, xTotal };
+    const xReduc = hasReduc ? xReducMaybe : Math.min(xTotal - 40, xTVA + 50);
+
+    return { found:true, headerY: header.y, hasReduc, xType:0, xDesc, xPU, xQty, xTVA, xReduc, xTotal };
   }
 
   function lineToRow(line, cols) {
-    const cells = { type:"", desc:"", pu:"", qty:"", tva:"", total:"" };
+    const cells = { type:"", desc:"", pu:"", qty:"", tva:"", reduc:"", total:"" };
 
     for (const it of line.items) {
       const x = it.x;
@@ -571,12 +579,31 @@
       else if (x < cols.xPU) cells.desc += (cells.desc ? " " : "") + str;
       else if (x < cols.xQty) cells.pu += (cells.pu ? " " : "") + str;
       else if (x < cols.xTVA) cells.qty += (cells.qty ? " " : "") + str;
-      else if (x < cols.xTotal) cells.tva += (cells.tva ? " " : "") + str;
+      else if (cols.hasReduc && x < cols.xReduc) cells.tva += (cells.tva ? " " : "") + str;
+      else if (cols.hasReduc && x < cols.xTotal) cells.reduc += (cells.reduc ? " " : "") + str;
+      else if (!cols.hasReduc && x < cols.xTotal) cells.tva += (cells.tva ? " " : "") + str;
       else cells.total += (cells.total ? " " : "") + str;
     }
 
     for (const k of Object.keys(cells)) cells[k] = cells[k].replace(/\s+/g," ").trim();
     return cells;
+  }
+
+  // ✅ fallback to recover desc when desc is empty but raw has text (fix line "120€")
+  function recoverDescFromRaw(raw, row) {
+    let s = raw || "";
+    s = s.replace(/^Service\s*/i, "").trim();
+    // remove known cells (best effort)
+    const removeList = [row.pu, row.qty, row.tva, row.reduc, row.total].filter(Boolean);
+    for (const part of removeList) {
+      const esc = part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      s = s.replace(new RegExp(esc, "g"), " ").trim();
+    }
+    // remove repeated % leftovers
+    s = s.replace(/\b\d{1,3}\s*%\b/g, (m) => m); // keep if it's actually part of desc
+    // remove trailing numeric garbage (e.g. qty alone)
+    s = s.replace(/\s+/g, " ").trim();
+    return s;
   }
 
   function extractPdfTableFromTextContent(textContent) {
@@ -597,7 +624,7 @@
     }
 
     const region = lines.slice(tableStartIndex + 1);
-    const stopRe = /(total\s*ht|total\s*ttc|page\s+\d+|ribs?|iban|bic|si[eè]ge\s+social)/i;
+    const stopRe = /(total\s*ht|total\s*ttc|page\s+\d+|ribs?|iban|bic|si[eè]ge\s+social|conditions)/i;
 
     const tableLines = [];
     for (const l of region) {
@@ -609,7 +636,7 @@
     const debours = [];
 
     const hasMoney = (s) => /[0-9]\s*[0-9\s]*[,\.]\d{2}/.test(s) || (/€/.test(s) && /\d/.test(s));
-    const hasPercent = (s) => /\b\d{1,2}\s*%/.test(s);
+    const hasPercent = (s) => /\b\d{1,3}\s*%/.test(s);
 
     let lastService = null;
 
@@ -621,19 +648,28 @@
 
       const row = lineToRow(l, cols);
 
+      // 1) merge wrap: description continuation line (no money)
       const looksLikeContinuation =
-        !row.type && row.desc && !hasMoney(row.pu) && !hasMoney(row.total) && !hasPercent(row.tva);
+        !row.type && row.desc && !hasMoney(row.pu) && !hasMoney(row.total) && !hasPercent(row.tva) && !hasPercent(row.reduc);
 
       if (looksLikeContinuation && lastService) {
         lastService.desc = (lastService.desc + " " + row.desc).replace(/\s+/g," ").trim();
         continue;
       }
 
+      // 2) detect service
       const isService =
         /service/i.test(row.type) ||
         (row.desc && (hasMoney(row.total) || hasMoney(row.pu)) && (row.qty || hasPercent(row.tva)));
 
       if (isService) {
+        // ✅ FIX: if desc empty but raw has text → rebuild desc
+        if ((!row.desc || row.desc.length < 3) && raw) {
+          const fallback = recoverDescFromRaw(raw, row);
+          // avoid pure numeric desc
+          if (fallback && /[A-Za-zÀ-ÿ]/.test(fallback)) row.desc = fallback;
+        }
+
         services.push(row);
         lastService = row;
       }
@@ -645,6 +681,7 @@
       cols,
       debug: {
         headerFound: cols.found,
+        hasReduc: cols.hasReduc,
         headerY: cols.headerY || null,
         totalLines: lines.length,
         tableLines: tableLines.length,
@@ -653,10 +690,13 @@
     };
   }
 
-  function renderPdfTableHtml(services, debours) {
+  function renderPdfTableHtml(services, debours, hasReduc) {
+    // show reduction column if detected or if any row has reduc
+    const showReduc = !!hasReduc || services.some(r => (r.reduc || "").includes("%"));
+
     let html = `<table class="tablePdf">
       <thead><tr>
-        <th>Type</th><th>Description</th><th>PU HT</th><th>Qté</th><th>TVA</th><th>Total HT</th>
+        <th>Type</th><th>Description</th><th>PU HT</th><th>Qté</th><th>TVA</th>${showReduc ? "<th>Réduction</th>" : ""}<th>Total HT</th>
       </tr></thead><tbody>`;
 
     for (const r of services) {
@@ -666,13 +706,14 @@
         <td>${escapeHtml(r.pu)}</td>
         <td>${escapeHtml(r.qty)}</td>
         <td>${escapeHtml(r.tva)}</td>
+        ${showReduc ? `<td>${escapeHtml(r.reduc || "")}</td>` : ""}
         <td>${escapeHtml(r.total)}</td>
       </tr>`;
     }
 
     if (debours.length > 0) {
-      html += `<tr class="rowDebours"><td colspan="6">Débours</td></tr>`;
-      for (const d of debours) html += `<tr class="rowDebours"><td colspan="6">${escapeHtml(d)}</td></tr>`;
+      html += `<tr class="rowDebours"><td colspan="${showReduc ? 7 : 6}">Débours</td></tr>`;
+      for (const d of debours) html += `<tr class="rowDebours"><td colspan="${showReduc ? 7 : 6}">${escapeHtml(d)}</td></tr>`;
     }
 
     html += `</tbody></table>`;
@@ -680,7 +721,7 @@
   }
 
   // ------------------------------------------------------------
-  // Parse LINES from TABLE rows for DB + matches (highlight)
+  // Parse lines from table rows -> DB + matches
   // ------------------------------------------------------------
   function parseLinesFromTable(tablePages, parserOut) {
     const lines = [];
@@ -688,10 +729,12 @@
 
     const allServices = [];
     const allDeboursRaw = [];
+    let anyReduc = false;
 
     for (const p of (tablePages || [])) {
       if (p?.services) allServices.push(...p.services);
       if (p?.debours) allDeboursRaw.push(...p.debours);
+      if (p?.debug?.hasReduc) anyReduc = true;
     }
 
     for (const r of allServices) {
@@ -711,6 +754,7 @@
       const pu = normalizeNumber(r.pu);
       const qty = parseInt((r.qty || "1").replace(/\D/g,""), 10) || 1;
       const tva = parsePercent(r.tva) || null;
+      const reduc = parsePercent(r.reduc) || null;
       const total = normalizeNumber(r.total);
 
       const obj = {
@@ -725,17 +769,19 @@
         prix_unitaire_ht: pu,
         quantite: qty,
         tva,
+        reduction_percent: reduc,
         prix_total_ht: total,
         confidence: "high",
         source_text: JSON.stringify(r)
       };
       lines.push(obj);
 
-      // ✅ enrich matches for better highlight
+      // matches pour surlignage
       if (parserOut?.matches) {
         parserOut.matches.push({ label:"service_desc", value: cleanDesc, raw: cleanDesc });
         if (r.total) parserOut.matches.push({ label:"service_total_raw", value: r.total, raw: r.total });
         if (r.pu) parserOut.matches.push({ label:"service_pu_raw", value: r.pu, raw: r.pu });
+        if (r.reduc) parserOut.matches.push({ label:"service_reduction_raw", value: r.reduc, raw: r.reduc });
       }
     }
 
@@ -872,7 +918,7 @@
   }
 
   // ------------------------------------------------------------
-  // Viewer: openViewer (hoisted function -> safe with delegation)
+  // Viewer
   // ------------------------------------------------------------
   async function openViewer(idx) {
     const item = state.files[idx];
@@ -899,13 +945,16 @@
     const tablePages = data?.donnees_brutes?.table || [];
     const servicesAll = [];
     const deboursAll = [];
+    let hasReduc = false;
+
     for (const p of tablePages) {
       if (p?.services) servicesAll.push(...p.services);
       if (p?.debours) deboursAll.push(...p.debours);
+      if (p?.debug?.hasReduc) hasReduc = true;
     }
 
     tableContent.innerHTML = (servicesAll.length || deboursAll.length)
-      ? renderPdfTableHtml(servicesAll, deboursAll)
+      ? renderPdfTableHtml(servicesAll, deboursAll, hasReduc)
       : `<div class="muted">Aucun tableau détecté. Vérifie donnees_brutes.table_debug.</div>`;
 
     textContent.innerHTML = "<i>Chargement…</i>";
@@ -988,6 +1037,7 @@
     parsed.table_debug = tablePages.map(tp => ({
       page: tp.page,
       headerFound: tp.debug?.headerFound,
+      hasReduc: tp.debug?.hasReduc,
       servicesDetected: tp.debug?.servicesDetected,
       tableLines: tp.debug?.tableLines
     }));
@@ -1020,8 +1070,9 @@
         trajet_brut: l.description_service,
         prix_unitaire_ht: l.prix_unitaire_ht,
         quantite: l.quantite,
-        prix_total_ht: l.prix_total_ht,
         tva: l.tva,
+        reduction_percent: l.reduction_percent,
+        prix_total_ht: l.prix_total_ht,
         flags: { confidence:l.confidence, source_text:l.source_text }
       }));
 
@@ -1039,8 +1090,9 @@
         source_text: l.source_text,
         prix_unitaire_ht: l.prix_unitaire_ht,
         quantite: l.quantite,
-        total_ht: l.prix_total_ht,
         tva: l.tva,
+        reduction_percent: l.reduction_percent,
+        total_ht: l.prix_total_ht,
         flags: { confidence:l.confidence },
         status: "READY"
       }));
