@@ -38,8 +38,8 @@
     .hlBox { display:flex; gap:10px; flex-wrap:wrap; padding:10px 12px; border:1px solid #eee; border-radius:12px; background:#fafafa; margin:10px 0; }
     .hlTag { border:1px solid #ddd; border-radius:999px; padding:4px 8px; font-size:12px; background:#fff; }
 
-    /* Modal */
-    #textModal { display:none; pointer-events:none; }
+    /* Modal (robuste) */
+    #textModal { display:none; pointer-events:none; z-index: 9999; }
     #textModal.open { display:flex !important; pointer-events:auto; }
 
     /* Table */
@@ -71,7 +71,7 @@
 <header>
   <div style="display:flex; align-items:center; gap:10px;">
     <button class="btn" id="backBtn">⬅️ Retour</button>
-    <strong>📤 Import Factures (Table V2 + Surlignage)</strong>
+    <strong>📤 Import Factures (Table detector V2 + fix boutons)</strong>
   </div>
 
   <div class="authBox">
@@ -86,7 +86,7 @@
 <main>
   <div class="notice">
     <div><strong>Objectif :</strong> détecter les services dans le tableau PDF (même si header éclaté), remplir la DB et surligner les infos utiles.</div>
-    <div class="muted small">✅ Table detector V2 • ✅ fusion wrap • ✅ debug table • ✅ client sans adresse • ✅ surlignage enrichi</div>
+    <div class="muted small">✅ Table detector V2 • ✅ fusion wrap • ✅ debug table • ✅ client sans adresse • ✅ “Voir” stable</div>
   </div>
 
   <div id="globalMsg" class="msg warn" style="display:none; margin-bottom:14px;"></div>
@@ -133,7 +133,7 @@
 <!-- ✅ MODALE VIEWER -->
 <div id="textModal" style="
   position:fixed; inset:0; background:rgba(0,0,0,.5);
-  align-items:center; justify-content:center; padding:18px; z-index:9999;">
+  align-items:center; justify-content:center; padding:18px;">
   <div style="
     width:min(1100px, 96vw); max-height:88vh; background:#fff; border-radius:14px;
     border:1px solid #e5e5e5; overflow:hidden; display:flex; flex-direction:column;">
@@ -155,7 +155,7 @@
 
       <div id="tableWrap" style="display:none;">
         <div class="muted small" style="margin-bottom:8px;">
-          Tableau reconstruit depuis X/Y PDF. Si vide, regarde le debug stocké dans donnees_brutes.table_debug.
+          Tableau reconstruit depuis X/Y PDF. Si vide, regarde le debug : donnees_brutes.table_debug.
         </div>
         <div id="tableContent" style="overflow:auto;"></div>
       </div>
@@ -175,11 +175,45 @@
 
 <script>
   // ------------------------------------------------------------
-  // UI helpers
+  // Globals / DOM
   // ------------------------------------------------------------
   const MAX_FILES = 20;
   const MAX_SIZE = 10 * 1024 * 1024;
+  let sb = null;
 
+  const state = { files: [] };
+
+  const dropZone = document.getElementById("dropZone");
+  const fileInput = document.getElementById("fileInput");
+  const startUploadBtn = document.getElementById("startUploadBtn");
+  const clearBtn = document.getElementById("clearBtn");
+  const filesTbody = document.getElementById("filesTbody");
+  const selectedCount = document.getElementById("selectedCount");
+
+  const authStatus = document.getElementById("authStatus");
+  const loginBtn = document.getElementById("loginBtn");
+  const logoutBtn = document.getElementById("logoutBtn");
+  const emailInput = document.getElementById("emailInput");
+  const passInput = document.getElementById("passInput");
+
+  // Viewer refs
+  const textModal = document.getElementById("textModal");
+  const closeTextBtn = document.getElementById("closeTextBtn");
+  const copyTextBtn = document.getElementById("copyTextBtn");
+  const textMeta = document.getElementById("textMeta");
+  const tabTextBtn = document.getElementById("tabTextBtn");
+  const tabTableBtn = document.getElementById("tabTableBtn");
+  const textWrap = document.getElementById("textWrap");
+  const tableWrap = document.getElementById("tableWrap");
+  const tableContent = document.getElementById("tableContent");
+  const textContent = document.getElementById("textContent");
+  const hlBox = document.getElementById("hlBox");
+
+  document.getElementById("backBtn").onclick = () => window.location.href = "index.html";
+
+  // ------------------------------------------------------------
+  // UI Helpers
+  // ------------------------------------------------------------
   function setMsg(type, text) {
     const box = document.getElementById("globalMsg");
     box.className = "msg " + (type || "warn");
@@ -193,8 +227,13 @@
     if (kb < 1024) return kb.toFixed(1) + " KB";
     return (kb / 1024).toFixed(1) + " MB";
   }
-  function isPdf(file) { return file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf"); }
-  function sanitizeFilename(name) { return name.replace(/[^a-zA-Z0-9.\-_]/g, "_").replace(/_{2,}/g, "_"); }
+
+  function isPdf(file) {
+    return file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+  }
+  function sanitizeFilename(name) {
+    return name.replace(/[^a-zA-Z0-9.\-_]/g, "_").replace(/_{2,}/g, "_");
+  }
 
   function escapeHtml(s) {
     return (s || "").replace(/[&<>"']/g, c => ({
@@ -203,7 +242,32 @@
   }
 
   // ------------------------------------------------------------
-  // ✅ Highlight stable (deterministic)
+  // Modal
+  // ------------------------------------------------------------
+  function closeModal() {
+    textModal.classList.remove("open");
+    textContent.innerHTML = "";
+    tableContent.innerHTML = "";
+    hlBox.innerHTML = "";
+  }
+  closeTextBtn.onclick = closeModal;
+  textModal.addEventListener("click", (e) => { if (e.target === textModal) closeModal(); });
+
+  copyTextBtn.onclick = async () => {
+    await navigator.clipboard.writeText(textContent.textContent || "");
+    copyTextBtn.textContent = "✅ Copié";
+    setTimeout(() => copyTextBtn.textContent = "📋 Copier", 900);
+  };
+
+  function setTab(which) {
+    if (which === "text") { textWrap.style.display = "block"; tableWrap.style.display = "none"; }
+    else { textWrap.style.display = "none"; tableWrap.style.display = "block"; }
+  }
+  tabTextBtn.onclick = () => setTab("text");
+  tabTableBtn.onclick = () => setTab("table");
+
+  // ------------------------------------------------------------
+  // Highlight stable
   // ------------------------------------------------------------
   function highlightText(rawText, highlights) {
     if (!rawText) return "⚠️ Aucun texte.";
@@ -216,7 +280,6 @@
       for (let i = 0; i < s.length; i++) {
         let c = s[i];
         if (c === "’") c = "'";
-
         if (/\s/.test(c)) {
           if (lastWasSpace) continue;
           c = " ";
@@ -224,7 +287,6 @@
         } else {
           lastWasSpace = false;
         }
-
         norm += c.toLowerCase();
         map.push(i);
       }
@@ -277,14 +339,13 @@
   }
 
   function renderHighlightsBox(data) {
-    const box = document.getElementById("hlBox");
     const tags = [];
     if (data.numero_facture) tags.push(`<span class="hlTag"># ${escapeHtml(String(data.numero_facture))}</span>`);
     if (data.date_facture) tags.push(`<span class="hlTag">📅 ${escapeHtml(String(data.date_facture))}</span>`);
     if (data.client_nom) tags.push(`<span class="hlTag">👤 ${escapeHtml(String(data.client_nom))}</span>`);
     if (typeof data.total_ht === "number") tags.push(`<span class="hlTag">HT ${escapeHtml(String(data.total_ht))}</span>`);
     if (typeof data.total_ttc === "number") tags.push(`<span class="hlTag">TTC ${escapeHtml(String(data.total_ttc))}</span>`);
-    box.innerHTML = tags.length ? tags.join(" ") : `<span class="muted">Aucune donnée structurée détectée.</span>`;
+    hlBox.innerHTML = tags.length ? tags.join(" ") : `<span class="muted">Aucune donnée structurée détectée.</span>`;
   }
 
   function buildHighlightsFromDB(data) {
@@ -298,6 +359,7 @@
       hl.push({ label: m.label, value: String(m.value) });
     }
 
+    // dedupe
     const seen = new Set();
     return hl.filter(x => {
       const key = x.label + "::" + x.value;
@@ -358,7 +420,7 @@
   }
 
   // ------------------------------------------------------------
-  // ✅ Client clean (keep name, cut address)
+  // Client clean (keep name, cut address)
   // ------------------------------------------------------------
   function cleanClientName(raw) {
     if (!raw) return null;
@@ -369,13 +431,8 @@
       const idx = s.indexOf(m);
       if (idx > 2) { s = s.slice(0, idx).trim(); break; }
     }
-
-    // cut at postal code (5 digits) => removes address, keeps "24"
     s = s.replace(/\b\d{5}\b[\s\S]*$/g, "").trim();
-
-    // cut at country if present
     s = s.replace(/\b(France|Belgique|Suisse|Luxembourg)\b[\s\S]*$/i, "").trim();
-
     s = s.replace(/[,;:\-]+$/g, "").trim();
     return s.length >= 2 ? s : null;
   }
@@ -384,10 +441,9 @@
   // Parse facture header/totaux
   // ------------------------------------------------------------
   function parseInvoiceText(fullText) {
-    const out = { version:"parser_table_v2", parsed_at:new Date().toISOString(), fields:{}, matches:[] };
+    const out = { version:"parser_table_v2_fix", parsed_at:new Date().toISOString(), fields:{}, matches:[] };
     const t = fullText || "";
 
-    // numéro facture
     const mFact = t.match(/\bFacture\s+([A-Z]{2,6}-\d{3,4}-\d{2,})\b/i) || t.match(/\bFACT-\d{4}-\d{2,}\b/);
     if (mFact) {
       const val = (mFact[1] || mFact[0]).trim();
@@ -395,7 +451,6 @@
       out.matches.push({ label:"numero_facture", value: val, raw: mFact[0] });
     }
 
-    // date facture
     const mDateTxt = t.match(/\b(\d{1,2}\s+(janvier|février|fevrier|mars|avril|mai|juin|juillet|août|aout|septembre|octobre|novembre|décembre|decembre)\s+\d{4})\b/i);
     if (mDateTxt) {
       const rawDate = mDateTxt[1].trim();
@@ -406,7 +461,6 @@
       }
     }
 
-    // client block (Destinataire ... Conditions)
     const mDest = t.match(/Destinataire\s+([\s\S]+?)\s+Conditions/i);
     if (mDest) {
       const rawClientBlock = mDest[1].replace(/\s+/g," ").trim();
@@ -417,7 +471,6 @@
       }
     }
 
-    // totaux (2 variantes)
     const mTotals1 = t.match(/Total\s*HT\s+TVA\s*\(\s*\d+%\s*\)\s+Total\s*TTC\s+([0-9\s.,]+)\s*€?\s+([0-9\s.,]+)\s*€?\s+([0-9\s.,]+)\s*€/i);
     if (mTotals1) {
       out.fields.total_ht = normalizeNumber(mTotals1[1]);
@@ -431,7 +484,6 @@
     const mHT = t.match(/Total\s*HT\s*[:\s]\s*([0-9\s.,]+)\s*€/i);
     const mTVA = t.match(/\bTVA\s*[:\s]\s*([0-9\s.,]+)\s*€/i);
     const mTTC = t.match(/Total\s*TTC\s*[:\s]\s*([0-9\s.,]+)\s*€/i);
-
     if (mHT) { out.fields.total_ht = normalizeNumber(mHT[1]); out.matches.push({ label:"total_ht", value:mHT[1], raw:mHT[0] }); }
     if (mTVA) { out.fields.total_tva = normalizeNumber(mTVA[1]); out.matches.push({ label:"total_tva", value:mTVA[1], raw:mTVA[0] }); }
     if (mTTC) { out.fields.total_ttc = normalizeNumber(mTTC[1]); out.matches.push({ label:"total_ttc", value:mTTC[1], raw:mTTC[0] }); }
@@ -480,17 +532,13 @@
     for (const l of lines) {
       const s = (l.text || "").toLowerCase();
       let score = 0;
-      for (const kw of KEYWORDS) {
-        if (kw.k.some(x => s.includes(x))) score++;
-      }
+      for (const kw of KEYWORDS) if (kw.k.some(x => s.includes(x))) score++;
       if (score >= 3) {
         if (!best || score > best.score) best = { line:l, score };
       }
     }
 
-    if (!best) {
-      return { found:false, xType:0, xDesc:90, xPU:360, xQty:470, xTVA:540, xTotal:610 };
-    }
+    if (!best) return { found:false, xType:0, xDesc:90, xPU:360, xQty:470, xTVA:540, xTotal:610 };
 
     const header = best.line;
 
@@ -549,7 +597,6 @@
     }
 
     const region = lines.slice(tableStartIndex + 1);
-
     const stopRe = /(total\s*ht|total\s*ttc|page\s+\d+|ribs?|iban|bic|si[eè]ge\s+social)/i;
 
     const tableLines = [];
@@ -570,11 +617,7 @@
       const raw = l.text || "";
       if (!raw) continue;
 
-      if (/débours/i.test(raw)) {
-        debours.push(raw);
-        lastService = null;
-        continue;
-      }
+      if (/débours/i.test(raw)) { debours.push(raw); lastService = null; continue; }
 
       const row = lineToRow(l, cols);
 
@@ -610,9 +653,6 @@
     };
   }
 
-  // ------------------------------------------------------------
-  // Render PDF table HTML
-  // ------------------------------------------------------------
   function renderPdfTableHtml(services, debours) {
     let html = `<table class="tablePdf">
       <thead><tr>
@@ -640,7 +680,7 @@
   }
 
   // ------------------------------------------------------------
-  // ✅ Parse LINES from TABLE rows for DB
+  // Parse LINES from TABLE rows for DB + matches (highlight)
   // ------------------------------------------------------------
   function parseLinesFromTable(tablePages, parserOut) {
     const lines = [];
@@ -691,7 +731,7 @@
       };
       lines.push(obj);
 
-      // ✅ enrich matches for highlighting
+      // ✅ enrich matches for better highlight
       if (parserOut?.matches) {
         parserOut.matches.push({ label:"service_desc", value: cleanDesc, raw: cleanDesc });
         if (r.total) parserOut.matches.push({ label:"service_total_raw", value: r.total, raw: r.total });
@@ -705,94 +745,24 @@
       const amount = amountRaw ? normalizeNumber(amountRaw) : null;
       const desc = amountRaw ? raw.replace(mAmt[0], "").replace(/\s+/g," ").trim() : raw.trim();
 
-      const obj = {
+      lines.push({
         type: "debours",
         ligne_numero: idx++,
-        date_service: null,
-        heure_service: null,
         description_service: desc,
-        source_lieu: null,
-        destination_lieu: null,
-        prix_unitaire_ht: null,
-        quantite: null,
-        tva: null,
         prix_total_ht: amount,
         confidence: "high",
         source_text: raw
-      };
-      lines.push(obj);
+      });
 
-      if (parserOut?.matches) {
-        parserOut.matches.push({ label:"debours_desc", value: desc, raw: raw });
-      }
+      if (parserOut?.matches) parserOut.matches.push({ label:"debours_desc", value: desc, raw: raw });
     }
 
     return lines;
   }
 
   // ------------------------------------------------------------
-  // State + DOM
+  // Render list
   // ------------------------------------------------------------
-  const state = { files: [] };
-  const dropZone = document.getElementById("dropZone");
-  const fileInput = document.getElementById("fileInput");
-  const startUploadBtn = document.getElementById("startUploadBtn");
-  const clearBtn = document.getElementById("clearBtn");
-  const filesTbody = document.getElementById("filesTbody");
-  const selectedCount = document.getElementById("selectedCount");
-
-  const authStatus = document.getElementById("authStatus");
-  const loginBtn = document.getElementById("loginBtn");
-  const logoutBtn = document.getElementById("logoutBtn");
-  const emailInput = document.getElementById("emailInput");
-  const passInput = document.getElementById("passInput");
-
-  document.getElementById("backBtn").onclick = () => window.location.href = "index.html";
-
-  async function waitForSupabaseClient() {
-    for (let i = 0; i < 60; i++) {
-      if (window.SupabaseClient) return window.SupabaseClient;
-      await new Promise(r => setTimeout(r, 100));
-    }
-    throw new Error("SupabaseClient non initialisé (timeout)");
-  }
-
-  let sb;
-
-  // Viewer refs
-  const textModal = document.getElementById("textModal");
-  const closeTextBtn = document.getElementById("closeTextBtn");
-  const copyTextBtn = document.getElementById("copyTextBtn");
-  const textMeta = document.getElementById("textMeta");
-  const tabTextBtn = document.getElementById("tabTextBtn");
-  const tabTableBtn = document.getElementById("tabTableBtn");
-  const textWrap = document.getElementById("textWrap");
-  const tableWrap = document.getElementById("tableWrap");
-  const tableContent = document.getElementById("tableContent");
-  const textContent = document.getElementById("textContent");
-
-  function closeModal() {
-    textModal.classList.remove("open");
-    textContent.innerHTML = "";
-    tableContent.innerHTML = "";
-    document.getElementById("hlBox").innerHTML = "";
-  }
-  closeTextBtn.onclick = closeModal;
-  textModal.addEventListener("click", (e) => { if (e.target === textModal) closeModal(); });
-
-  copyTextBtn.onclick = async () => {
-    await navigator.clipboard.writeText(textContent.textContent || "");
-    copyTextBtn.textContent = "✅ Copié";
-    setTimeout(() => copyTextBtn.textContent = "📋 Copier", 900);
-  };
-
-  function setTab(which) {
-    if (which === "text") { textWrap.style.display = "block"; tableWrap.style.display = "none"; }
-    else { textWrap.style.display = "none"; tableWrap.style.display = "block"; }
-  }
-  tabTextBtn.onclick = () => setTab("text");
-  tabTableBtn.onclick = () => setTab("table");
-
   function render() {
     selectedCount.textContent = String(state.files.length);
     const anyBusy = state.files.some(f => ["uploading","extracting"].includes(f.status));
@@ -831,17 +801,38 @@
         </tr>
       `);
     }
-
-    filesTbody.querySelectorAll("button[data-action]").forEach(btn => {
-      btn.onclick = async () => {
-        const idx = Number(btn.getAttribute("data-index"));
-        const action = btn.getAttribute("data-action");
-        if (action === "remove") { state.files.splice(idx, 1); render(); return; }
-        if (action === "view") { await openViewer(idx); return; }
-      };
-    });
   }
 
+  // ------------------------------------------------------------
+  // ✅ Event delegation (FIX: boutons "Voir" stables)
+  // ------------------------------------------------------------
+  filesTbody.addEventListener("click", async (e) => {
+    const btn = e.target.closest("button[data-action]");
+    if (!btn) return;
+
+    const idx = Number(btn.getAttribute("data-index"));
+    const action = btn.getAttribute("data-action");
+    if (Number.isNaN(idx) || idx < 0 || idx >= state.files.length) return;
+
+    try {
+      if (action === "remove") {
+        state.files.splice(idx, 1);
+        render();
+        return;
+      }
+      if (action === "view") {
+        await openViewer(idx);
+        return;
+      }
+    } catch (err) {
+      console.error("Button action failed:", err);
+      setMsg("err", "Erreur bouton: " + (err?.message || err));
+    }
+  });
+
+  // ------------------------------------------------------------
+  // File input + drop
+  // ------------------------------------------------------------
   function addFiles(fileList) {
     const incoming = Array.from(fileList);
     for (const file of incoming) {
@@ -856,8 +847,23 @@
   fileInput.addEventListener("change", (e) => addFiles(e.target.files));
   dropZone.addEventListener("dragover", (e) => { e.preventDefault(); dropZone.classList.add("drag"); });
   dropZone.addEventListener("dragleave", () => dropZone.classList.remove("drag"));
-  dropZone.addEventListener("drop", (e) => { e.preventDefault(); dropZone.classList.remove("drag"); if (e.dataTransfer?.files) addFiles(e.dataTransfer.files); });
+  dropZone.addEventListener("drop", (e) => {
+    e.preventDefault();
+    dropZone.classList.remove("drag");
+    if (e.dataTransfer?.files) addFiles(e.dataTransfer.files);
+  });
   clearBtn.onclick = () => { state.files = []; render(); };
+
+  // ------------------------------------------------------------
+  // Supabase init
+  // ------------------------------------------------------------
+  async function waitForSupabaseClient() {
+    for (let i = 0; i < 60; i++) {
+      if (window.SupabaseClient) return window.SupabaseClient;
+      await new Promise(r => setTimeout(r, 100));
+    }
+    throw new Error("SupabaseClient non initialisé (timeout)");
+  }
 
   async function ensureLoggedIn() {
     const { data: { user } } = await sb.auth.getUser();
@@ -866,7 +872,198 @@
   }
 
   // ------------------------------------------------------------
-  // Init
+  // Viewer: openViewer (hoisted function -> safe with delegation)
+  // ------------------------------------------------------------
+  async function openViewer(idx) {
+    const item = state.files[idx];
+    if (!item?.factureId) return;
+
+    const { data, error } = await sb
+      .from("factures")
+      .select("id,fichier_nom,statut,texte_ocr,created_at,donnees_brutes,numero_facture,date_facture,total_ht,total_tva,total_ttc,client_nom")
+      .eq("id", item.factureId)
+      .single();
+    if (error) return setMsg("err", "Erreur lecture: " + error.message);
+
+    textMeta.innerHTML = `
+      <div><strong>Facture ID :</strong> <span class="mono">${escapeHtml(data.id)}</span></div>
+      <div><strong>Fichier :</strong> ${escapeHtml(data.fichier_nom || "—")}</div>
+      <div><strong>Statut :</strong> <span class="mono">${escapeHtml(data.statut || "—")}</span></div>
+      <div><strong>Créé le :</strong> ${escapeHtml(data.created_at || "—")}</div>
+    `;
+
+    renderHighlightsBox(data);
+    setTab("text");
+    textModal.classList.add("open");
+
+    const tablePages = data?.donnees_brutes?.table || [];
+    const servicesAll = [];
+    const deboursAll = [];
+    for (const p of tablePages) {
+      if (p?.services) servicesAll.push(...p.services);
+      if (p?.debours) deboursAll.push(...p.debours);
+    }
+
+    tableContent.innerHTML = (servicesAll.length || deboursAll.length)
+      ? renderPdfTableHtml(servicesAll, deboursAll)
+      : `<div class="muted">Aucun tableau détecté. Vérifie donnees_brutes.table_debug.</div>`;
+
+    textContent.innerHTML = "<i>Chargement…</i>";
+    const rawText = (data.texte_ocr || "").trim();
+    const highlights = buildHighlightsFromDB(data);
+    requestAnimationFrame(() => {
+      textContent.innerHTML = highlightText(rawText || "⚠️ Aucun texte.", highlights);
+    });
+  }
+
+  // ------------------------------------------------------------
+  // Upload + Extract
+  // ------------------------------------------------------------
+  async function uploadAndProcessOne(item) {
+    item.status = "uploading"; item.error = null; render();
+    try {
+      await ensureLoggedIn();
+
+      const year = new Date().getFullYear();
+      const ts = Date.now();
+      const filename = `${ts}_${sanitizeFilename(item.file.name)}`;
+      const path = `${year}/${filename}`;
+
+      const { data: up, error: upErr } = await sb.storage.from("factures").upload(path, item.file, {
+        upsert:false, cacheControl:"3600", contentType:"application/pdf"
+      });
+      if (upErr) throw upErr;
+      item.uploadPath = up.path;
+
+      const { data: inserted, error: dbErr } = await sb
+        .from("factures")
+        .insert({ fichier_url: up.path, fichier_nom: item.file.name, statut:"pending", format_facture:"moderne" })
+        .select("id")
+        .single();
+      if (dbErr) throw dbErr;
+      item.factureId = inserted.id;
+
+      item.status = "extracting"; render();
+      await extractParseSaveAndInsert(item);
+
+      item.status = "extracted"; render();
+    } catch (err) {
+      item.status = "error";
+      item.error = err?.message || String(err);
+      render();
+      if (item.factureId) await sb.from("factures").update({ statut:"error", error_message:item.error }).eq("id", item.factureId);
+    }
+  }
+
+  async function extractParseSaveAndInsert(item) {
+    const { data: signed, error: signErr } = await sb.storage.from("factures").createSignedUrl(item.uploadPath, 60*10);
+    if (signErr) throw signErr;
+
+    const res = await fetch(signed.signedUrl);
+    if (!res.ok) throw new Error("Téléchargement PDF impossible");
+    const arrayBuffer = await res.arrayBuffer();
+
+    const pdf = await window.pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+
+    let fullText = "";
+    const tablePages = [];
+
+    for (let p=1; p<=pdf.numPages; p++) {
+      const page = await pdf.getPage(p);
+      const content = await page.getTextContent();
+
+      fullText += `\n\n=== PAGE ${p} ===\n` + content.items.map(it => it.str).join(" ");
+      const table = extractPdfTableFromTextContent(content);
+      tablePages.push({ page: p, ...table });
+    }
+
+    fullText = fullText.trim();
+    if (fullText.length < 30) throw new Error("Texte extrait vide/trop court (PDF scan ?)");
+
+    const parsed = parseInvoiceText(fullText);
+
+    parsed.table = tablePages;
+    parsed.lines = parseLinesFromTable(tablePages, parsed);
+
+    parsed.table_debug = tablePages.map(tp => ({
+      page: tp.page,
+      headerFound: tp.debug?.headerFound,
+      servicesDetected: tp.debug?.servicesDetected,
+      tableLines: tp.debug?.tableLines
+    }));
+
+    const payload = { texte_ocr: fullText, statut:"extracted", donnees_brutes: parsed };
+
+    if (parsed?.fields?.numero_facture) payload.numero_facture = parsed.fields.numero_facture;
+    if (parsed?.fields?.date_facture) payload.date_facture = parsed.fields.date_facture;
+    if (parsed?.fields?.client_nom) payload.client_nom = parsed.fields.client_nom;
+    if (typeof parsed?.fields?.total_ht === "number") payload.total_ht = parsed.fields.total_ht;
+    if (typeof parsed?.fields?.total_tva === "number") payload.total_tva = parsed.fields.total_tva;
+    if (typeof parsed?.fields?.total_ttc === "number") payload.total_ttc = parsed.fields.total_ttc;
+
+    const { error: updErr } = await sb.from("factures").update(payload).eq("id", item.factureId);
+    if (updErr) throw updErr;
+
+    // Insert DB lines
+    const services = parsed.lines.filter(l => l.type === "service");
+    const debours = parsed.lines.filter(l => l.type === "debours");
+
+    if (services.length > 0) {
+      const rowsLF = services.map(l => ({
+        facture_id: item.factureId,
+        ligne_numero: l.ligne_numero,
+        date_service: l.date_service,
+        heure_service: l.heure_service,
+        source_lieu: l.source_lieu,
+        destination_lieu: l.destination_lieu,
+        description_service: l.description_service,
+        trajet_brut: l.description_service,
+        prix_unitaire_ht: l.prix_unitaire_ht,
+        quantite: l.quantite,
+        prix_total_ht: l.prix_total_ht,
+        tva: l.tva,
+        flags: { confidence:l.confidence, source_text:l.source_text }
+      }));
+
+      const { error: lfErr } = await sb.from("lignes_factures").insert(rowsLF);
+      if (lfErr) throw lfErr;
+
+      const year = parsed?.fields?.date_facture ? parseInt(parsed.fields.date_facture.slice(0,4),10) : new Date().getFullYear();
+      const rowsSAS = services.map(l => ({
+        facture_id: item.factureId,
+        annee: year,
+        date_service: l.date_service,
+        heure_service: l.heure_service,
+        source_lieu: l.source_lieu,
+        destination_lieu: l.destination_lieu,
+        source_text: l.source_text,
+        prix_unitaire_ht: l.prix_unitaire_ht,
+        quantite: l.quantite,
+        total_ht: l.prix_total_ht,
+        tva: l.tva,
+        flags: { confidence:l.confidence },
+        status: "READY"
+      }));
+
+      const { error: sasErr } = await sb.from("import_factures_rows").insert(rowsSAS);
+      if (sasErr) throw sasErr;
+    }
+
+    if (debours.length > 0) {
+      const rowsDeb = debours.map(l => ({
+        facture_id: item.factureId,
+        ligne_numero: l.ligne_numero,
+        description_service: "DEBOURS: " + l.description_service,
+        trajet_brut: l.description_service,
+        prix_total_ht: l.prix_total_ht,
+        flags: { type:"debours", source_text:l.source_text }
+      }));
+      await sb.from("lignes_factures").insert(rowsDeb);
+    }
+  }
+
+  // ------------------------------------------------------------
+  // Init app
   // ------------------------------------------------------------
   (async () => {
     try {
@@ -876,7 +1073,6 @@
           "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
       }
 
-      // Auth UI
       async function refreshAuthStatus() {
         const { data: { user } } = await sb.auth.getUser();
         if (user) {
@@ -911,152 +1107,7 @@
 
       logoutBtn.onclick = async () => { await sb.auth.signOut(); await refreshAuthStatus(); };
       sb.auth.onAuthStateChange(() => refreshAuthStatus());
-      refreshAuthStatus();
-
-      async function uploadAndProcessOne(item) {
-        item.status = "uploading"; item.error = null; render();
-        try {
-          await ensureLoggedIn();
-
-          const year = new Date().getFullYear();
-          const ts = Date.now();
-          const filename = `${ts}_${sanitizeFilename(item.file.name)}`;
-          const path = `${year}/${filename}`;
-
-          const { data: up, error: upErr } = await sb.storage.from("factures").upload(path, item.file, {
-            upsert:false, cacheControl:"3600", contentType:"application/pdf"
-          });
-          if (upErr) throw upErr;
-          item.uploadPath = up.path;
-
-          const { data: inserted, error: dbErr } = await sb
-            .from("factures")
-            .insert({ fichier_url: up.path, fichier_nom: item.file.name, statut:"pending", format_facture:"moderne" })
-            .select("id")
-            .single();
-          if (dbErr) throw dbErr;
-          item.factureId = inserted.id;
-
-          item.status = "extracting"; render();
-          await extractParseSaveAndInsert(item);
-
-          item.status = "extracted"; render();
-        } catch (err) {
-          item.status = "error";
-          item.error = err?.message || String(err);
-          render();
-          if (item.factureId) await sb.from("factures").update({ statut:"error", error_message:item.error }).eq("id", item.factureId);
-        }
-      }
-
-      async function extractParseSaveAndInsert(item) {
-        const { data: signed, error: signErr } = await sb.storage.from("factures").createSignedUrl(item.uploadPath, 60*10);
-        if (signErr) throw signErr;
-
-        const res = await fetch(signed.signedUrl);
-        if (!res.ok) throw new Error("Téléchargement PDF impossible");
-        const arrayBuffer = await res.arrayBuffer();
-
-        const pdf = await window.pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-
-        let fullText = "";
-        const tablePages = [];
-
-        for (let p=1; p<=pdf.numPages; p++) {
-          const page = await pdf.getPage(p);
-          const content = await page.getTextContent();
-
-          fullText += `\n\n=== PAGE ${p} ===\n` + content.items.map(it => it.str).join(" ");
-          const table = extractPdfTableFromTextContent(content);
-          tablePages.push({ page: p, ...table });
-        }
-
-        fullText = fullText.trim();
-        if (fullText.length < 30) throw new Error("Texte extrait vide/trop court (PDF scan ?)");
-
-        const parsed = parseInvoiceText(fullText);
-
-        // ✅ parse service lines from table rows
-        parsed.table = tablePages;
-        parsed.lines = parseLinesFromTable(tablePages, parsed);
-
-        // ✅ store debug
-        parsed.table_debug = tablePages.map(tp => ({
-          page: tp.page,
-          headerFound: tp.debug?.headerFound,
-          servicesDetected: tp.debug?.servicesDetected,
-          tableLines: tp.debug?.tableLines
-        }));
-
-        const payload = { texte_ocr: fullText, statut:"extracted", donnees_brutes: parsed };
-
-        if (parsed?.fields?.numero_facture) payload.numero_facture = parsed.fields.numero_facture;
-        if (parsed?.fields?.date_facture) payload.date_facture = parsed.fields.date_facture;
-        if (parsed?.fields?.client_nom) payload.client_nom = parsed.fields.client_nom;
-        if (typeof parsed?.fields?.total_ht === "number") payload.total_ht = parsed.fields.total_ht;
-        if (typeof parsed?.fields?.total_tva === "number") payload.total_tva = parsed.fields.total_tva;
-        if (typeof parsed?.fields?.total_ttc === "number") payload.total_ttc = parsed.fields.total_ttc;
-
-        const { error: updErr } = await sb.from("factures").update(payload).eq("id", item.factureId);
-        if (updErr) throw updErr;
-
-        // Insert DB lines
-        const services = parsed.lines.filter(l => l.type === "service");
-        const debours = parsed.lines.filter(l => l.type === "debours");
-
-        if (services.length > 0) {
-          const rowsLF = services.map(l => ({
-            facture_id: item.factureId,
-            ligne_numero: l.ligne_numero,
-            date_service: l.date_service,
-            heure_service: l.heure_service,
-            source_lieu: l.source_lieu,
-            destination_lieu: l.destination_lieu,
-            description_service: l.description_service,
-            trajet_brut: l.description_service,
-            prix_unitaire_ht: l.prix_unitaire_ht,
-            quantite: l.quantite,
-            prix_total_ht: l.prix_total_ht,
-            tva: l.tva,
-            flags: { confidence:l.confidence, source_text:l.source_text }
-          }));
-
-          const { error: lfErr } = await sb.from("lignes_factures").insert(rowsLF);
-          if (lfErr) throw lfErr;
-
-          const year = parsed?.fields?.date_facture ? parseInt(parsed.fields.date_facture.slice(0,4),10) : new Date().getFullYear();
-          const rowsSAS = services.map(l => ({
-            facture_id: item.factureId,
-            annee: year,
-            date_service: l.date_service,
-            heure_service: l.heure_service,
-            source_lieu: l.source_lieu,
-            destination_lieu: l.destination_lieu,
-            source_text: l.source_text,
-            prix_unitaire_ht: l.prix_unitaire_ht,
-            quantite: l.quantite,
-            total_ht: l.prix_total_ht,
-            tva: l.tva,
-            flags: { confidence:l.confidence },
-            status: "READY"
-          }));
-
-          const { error: sasErr } = await sb.from("import_factures_rows").insert(rowsSAS);
-          if (sasErr) throw sasErr;
-        }
-
-        if (debours.length > 0) {
-          const rowsDeb = debours.map(l => ({
-            facture_id: item.factureId,
-            ligne_numero: l.ligne_numero,
-            description_service: "DEBOURS: " + l.description_service,
-            trajet_brut: l.description_service,
-            prix_total_ht: l.prix_total_ht,
-            flags: { type:"debours", source_text:l.source_text }
-          }));
-          await sb.from("lignes_factures").insert(rowsDeb);
-        }
-      }
+      await refreshAuthStatus();
 
       startUploadBtn.onclick = async () => {
         try { await ensureLoggedIn(); } catch { return setMsg("warn", "Connecte-toi d’abord pour uploader."); }
@@ -1069,47 +1120,6 @@
         if (errCount === 0) setMsg("ok", `✅ Terminé : ${okCount} facture(s) traitée(s).`);
         else setMsg("err", `⚠️ Terminé : ${okCount} OK, ${errCount} erreurs.`);
       };
-
-      async function openViewer(idx) {
-        const item = state.files[idx];
-        if (!item?.factureId) return;
-
-        const { data, error } = await sb
-          .from("factures")
-          .select("id,fichier_nom,statut,texte_ocr,created_at,donnees_brutes,numero_facture,date_facture,total_ht,total_tva,total_ttc,client_nom")
-          .eq("id", item.factureId)
-          .single();
-        if (error) return setMsg("err", "Erreur lecture: " + error.message);
-
-        textMeta.innerHTML = `
-          <div><strong>Facture ID :</strong> <span class="mono">${escapeHtml(data.id)}</span></div>
-          <div><strong>Fichier :</strong> ${escapeHtml(data.fichier_nom || "—")}</div>
-          <div><strong>Statut :</strong> <span class="mono">${escapeHtml(data.statut || "—")}</span></div>
-          <div><strong>Créé le :</strong> ${escapeHtml(data.created_at || "—")}</div>
-        `;
-
-        renderHighlightsBox(data);
-        setTab("text");
-        textModal.classList.add("open");
-
-        const tablePages = data?.donnees_brutes?.table || [];
-        const servicesAll = [];
-        const deboursAll = [];
-        for (const p of tablePages) {
-          if (p?.services) servicesAll.push(...p.services);
-          if (p?.debours) deboursAll.push(...p.debours);
-        }
-        tableContent.innerHTML = (servicesAll.length || deboursAll.length)
-          ? renderPdfTableHtml(servicesAll, deboursAll)
-          : `<div class="muted">Aucun tableau détecté. Vérifie donnees_brutes.table_debug.</div>`;
-
-        textContent.innerHTML = "<i>Chargement…</i>";
-        const rawText = (data.texte_ocr || "").trim();
-        const highlights = buildHighlightsFromDB(data);
-        requestAnimationFrame(() => {
-          textContent.innerHTML = highlightText(rawText || "⚠️ Aucun texte.", highlights);
-        });
-      }
 
       render();
     } catch (e) {
