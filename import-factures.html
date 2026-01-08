@@ -67,7 +67,7 @@
 <header>
   <div style="display:flex; align-items:center; gap:10px;">
     <button class="btn" id="backBtn">⬅️ Retour</button>
-    <strong>📤 Import Factures (V2.2)</strong>
+    <strong>📤 Import Factures (V2.2.1)</strong>
   </div>
 
   <div class="authBox">
@@ -81,8 +81,8 @@
 
 <main>
   <div class="notice">
-    <div><strong>Objectif :</strong> extraction tableau stable + données propres (TVA/Total, desc vides, client sans adresse, totaux corrects).</div>
-    <div class="muted small">✅ Table detector V2.2 • ✅ Fix TVA→Total • ✅ Fix desc vide • ✅ Client clean • ✅ Totaux TTC correct • ✅ “Voir” stable</div>
+    <div><strong>Objectif :</strong> extraction tableau stable + données propres (client sans adresse, dates service même sans heure, PU arrondi).</div>
+    <div class="muted small">✅ V2.2.1 • ✅ Client cut "montée" • ✅ Date sans heure • ✅ PU arrondi 2 décimales</div>
   </div>
 
   <div id="globalMsg" class="msg warn" style="display:none; margin-bottom:14px;"></div>
@@ -415,7 +415,7 @@
   }
 
   // ------------------------------------------------------------
-  // Client clean V2.2
+  // Client clean V2.2.1 (montée / quai / passage)
   // ------------------------------------------------------------
   function cleanClientName(raw) {
     if (!raw) return null;
@@ -429,11 +429,14 @@
 
     s = s.replace(/\b(CS|BP)\b[\s\S]*$/i, "").trim();
     s = s.replace(/\bCEDEX\b[\s\S]*$/i, "").trim();
-    s = s.replace(/\b\d+\s*(bis|ter)?\s+(rue|route|avenue|av\.?|allée|allee|chemin|cours|boulevard|bd|place|impasse|za|zone)\b[\s\S]*$/i, "").trim();
+
+    // ✅ expanded street words
+    s = s.replace(/\b\d+\s*(bis|ter)?\s+(rue|route|avenue|av\.?|allée|allee|chemin|cours|boulevard|bd|place|impasse|za|zone|montée|montee|mont|quai|passage)\b[\s\S]*$/i, "").trim();
+
     s = s.replace(/\b\d{5}\b[\s\S]*$/g, "").trim();
     s = s.replace(/\b(France|Belgique|Suisse|Luxembourg)\b[\s\S]*$/i, "").trim();
 
-    // Remove double repeated name if identical halves
+    // Remove duplicated halves if identical
     const parts = s.split(" ");
     if (parts.length > 2) {
       const mid = Math.floor(parts.length / 2);
@@ -450,7 +453,7 @@
   // Parse facture header/totaux (fix TTC écrasé)
   // ------------------------------------------------------------
   function parseInvoiceText(fullText) {
-    const out = { version:"parser_table_v22", parsed_at:new Date().toISOString(), fields:{}, matches:[] };
+    const out = { version:"parser_table_v221", parsed_at:new Date().toISOString(), fields:{}, matches:[] };
     const t = fullText || "";
 
     const mFact = t.match(/\bFacture\s+([A-Z]{2,6}-\d{3,4}-\d{2,})\b/i) || t.match(/\bFACT-\d{4}-\d{2,}\b/);
@@ -480,7 +483,6 @@
       }
     }
 
-    // Totaux robustes
     const mTotals1 = t.match(/Total\s*HT\s+TVA\s*\(\s*\d+%\s*\)\s+Total\s*TTC\s+([0-9\s.,]+)\s*€?\s+([0-9\s.,]+)\s*€?\s+([0-9\s.,]+)\s*€/i);
     if (mTotals1) {
       out.fields.total_ht = normalizeNumber(mTotals1[1]);
@@ -489,7 +491,7 @@
       out.matches.push({ label:"total_ht", value: mTotals1[1], raw: mTotals1[0] });
       out.matches.push({ label:"total_tva", value: mTotals1[2], raw: mTotals1[0] });
       out.matches.push({ label:"total_ttc", value: mTotals1[3], raw: mTotals1[0] });
-      return out; // ✅ IMPORTANT : éviter écrasement par fallback
+      return out;
     }
 
     const mHT = t.match(/Total\s*HT\s*[:\s]\s*([0-9\s.,]+)\s*€/i);
@@ -503,24 +505,21 @@
   }
 
   // ------------------------------------------------------------
-  // ✅ TABLE DETECTOR V2.2
+  // TABLE DETECTOR (unchanged from V2.2)
   // ------------------------------------------------------------
   function groupItemsIntoLines(items, baseTolerance = 3.2) {
     const sorted = [...items].sort((a,b) => b.y - a.y);
     const lines = [];
-
     for (const it of sorted) {
       const tol = Math.max(baseTolerance, (it.h || 0) * 0.35);
       let line = lines.find(l => Math.abs(l.y - it.y) <= tol);
       if (!line) { line = { y: it.y, items: [], tol }; lines.push(line); }
       line.items.push(it);
     }
-
     for (const l of lines) {
       l.items.sort((a,b) => a.x - b.x);
       l.text = l.items.map(i => i.str).join(" ").replace(/\s+/g," ").trim();
     }
-
     lines.sort((a,b) => b.y - a.y);
     return lines;
   }
@@ -574,11 +573,9 @@
 
   function lineToRow(line, cols) {
     const cells = { type:"", desc:"", pu:"", qty:"", tva:"", reduc:"", total:"" };
-
     for (const it of line.items) {
       const x = it.x;
       const str = it.str;
-
       if (x < cols.xDesc) cells.type += (cells.type ? " " : "") + str;
       else if (x < cols.xPU) cells.desc += (cells.desc ? " " : "") + str;
       else if (x < cols.xQty) cells.pu += (cells.pu ? " " : "") + str;
@@ -588,12 +585,10 @@
       else if (!cols.hasReduc && x < cols.xTotal) cells.tva += (cells.tva ? " " : "") + str;
       else cells.total += (cells.total ? " " : "") + str;
     }
-
     for (const k of Object.keys(cells)) cells[k] = cells[k].replace(/\s+/g," ").trim();
     return cells;
   }
 
-  // ✅ Fix TVA column containing money and missing total
   function fixRowMoneyColumns(row) {
     if ((!row.total || row.total.trim() === "") && row.tva) {
       const m = row.tva.match(/([0-9][0-9\s]*[,\.]\d{2})\s*€?/);
@@ -613,23 +608,19 @@
   function recoverDescFromRaw(raw, row) {
     let s = raw || "";
     s = s.replace(/^Service\s*/i, "").trim();
-
     const removeList = [row.pu, row.qty, row.tva, row.reduc, row.total].filter(Boolean);
     for (const part of removeList) {
       const esc = part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       s = s.replace(new RegExp(esc, "g"), " ").trim();
     }
-
     s = s.replace(/\s+/g, " ").trim();
     return s;
   }
 
-  // ✅ Fix empty descriptions by splitting prev row if it contains 2+ dates
   function postFixEmptyDescriptions(services) {
     for (let i = 1; i < services.length; i++) {
       const cur = services[i];
       const prev = services[i - 1];
-
       const curNoDesc = (!cur.desc || cur.desc.trim().length < 3);
       const curHasMoney = (cur.pu || cur.total);
       if (!curNoDesc || !curHasMoney) continue;
@@ -640,10 +631,8 @@
         const second = dateMatches[1];
         const idx = prevDesc.indexOf(second);
         if (idx > 0) {
-          const part1 = prevDesc.slice(0, idx).trim();
-          const part2 = prevDesc.slice(idx).trim();
-          prev.desc = part1;
-          cur.desc = part2;
+          prev.desc = prevDesc.slice(0, idx).trim();
+          cur.desc = prevDesc.slice(idx).trim();
         }
       }
     }
@@ -686,7 +675,6 @@
     for (const l of tableLines) {
       const raw = l.text || "";
       if (!raw) continue;
-
       if (/débours/i.test(raw)) { debours.push(raw); lastService = null; continue; }
 
       const row = lineToRow(l, cols);
@@ -761,7 +749,7 @@
   }
 
   // ------------------------------------------------------------
-  // Parse LINES from TABLE rows -> DB + matches
+  // ✅ Parse LINES from TABLE rows -> DB + matches (date sans heure + PU arrondi)
   // ------------------------------------------------------------
   function parseLinesFromTable(tablePages, parserOut) {
     const lines = [];
@@ -779,17 +767,26 @@
       const desc = (r.desc || "").trim();
       let dateRaw = null, heure = null, cleanDesc = desc;
 
+      // ✅ date seule
+      const mDateOnly = desc.match(/^(\d{2}\/\d{2}\/\d{4})\s*:\s*(.*)$/);
+      if (mDateOnly) {
+        dateRaw = mDateOnly[1];
+        cleanDesc = (mDateOnly[2] || "").trim();
+      }
+
+      // ✅ date + heure
       const mDH = desc.match(/(\d{2}\/\d{2}\/\d{4})\s*:\s*([0-9]{1,2}h[0-9]{0,2})\s*(.*)/);
       if (mDH) {
         dateRaw = mDH[1];
         heure = mDH[2];
-        cleanDesc = (mDH[3] || "").trim() || desc.trim();
+        cleanDesc = (mDH[3] || "").trim() || cleanDesc;
       }
 
       const dateIso = dateRaw ? parseFrenchDateAny(dateRaw) : null;
       const { source_lieu, destination_lieu } = splitSourceDest(cleanDesc);
 
       const pu = normalizeNumber(r.pu);
+      const pu2 = (typeof pu === "number") ? Math.round(pu * 100) / 100 : pu; // ✅ arrondi
       const qty = parseInt((r.qty || "1").replace(/\D/g,""), 10) || 1;
       const tva = parsePercent(r.tva) || null;
       const reduc = parsePercent(r.reduc) || null;
@@ -804,7 +801,7 @@
         description_service: cleanDesc,
         source_lieu,
         destination_lieu,
-        prix_unitaire_ht: pu,
+        prix_unitaire_ht: pu2,
         quantite: qty,
         tva,
         reduction_percent: reduc,
@@ -818,7 +815,6 @@
         parserOut.matches.push({ label:"service_desc", value: cleanDesc, raw: cleanDesc });
         if (r.total) parserOut.matches.push({ label:"service_total_raw", value: r.total, raw: r.total });
         if (r.pu) parserOut.matches.push({ label:"service_pu_raw", value: r.pu, raw: r.pu });
-        if (r.reduc) parserOut.matches.push({ label:"service_reduction_raw", value: r.reduc, raw: r.reduc });
       }
     }
 
@@ -886,27 +882,16 @@
     }
   }
 
-  // ------------------------------------------------------------
-  // ✅ Event delegation (boutons stables)
-  // ------------------------------------------------------------
   filesTbody.addEventListener("click", async (e) => {
     const btn = e.target.closest("button[data-action]");
     if (!btn) return;
-
     const idx = Number(btn.getAttribute("data-index"));
     const action = btn.getAttribute("data-action");
     if (Number.isNaN(idx) || idx < 0 || idx >= state.files.length) return;
 
     try {
-      if (action === "remove") {
-        state.files.splice(idx, 1);
-        render();
-        return;
-      }
-      if (action === "view") {
-        await openViewer(idx);
-        return;
-      }
+      if (action === "remove") { state.files.splice(idx, 1); render(); return; }
+      if (action === "view") { await openViewer(idx); return; }
     } catch (err) {
       console.error("Button action failed:", err);
       setMsg("err", "Erreur bouton: " + (err?.message || err));
