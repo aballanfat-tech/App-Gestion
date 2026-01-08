@@ -33,16 +33,13 @@
     .msg.err { border-color:#ffb3b3; background:#fff2f2; }
     .msg.warn { border-color:#f1d88a; background:#fff7d6; }
 
-    /* Highlight */
     mark.hl { background:#ffe58f; padding:0 2px; border-radius:4px; }
     .hlBox { display:flex; gap:10px; flex-wrap:wrap; padding:10px 12px; border:1px solid #eee; border-radius:12px; background:#fafafa; margin:10px 0; }
     .hlTag { border:1px solid #ddd; border-radius:999px; padding:4px 8px; font-size:12px; background:#fff; }
 
-    /* Modal (robuste) */
     #textModal { display:none; pointer-events:none; z-index: 9999; }
     #textModal.open { display:flex !important; pointer-events:auto; }
 
-    /* Table */
     .tablePdf {
       width:100%;
       border-collapse: collapse;
@@ -63,7 +60,6 @@
     .rowDebours td { background:#fff7d6; font-weight:600; }
   </style>
 
-  <!-- PDF.js -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 </head>
 
@@ -71,7 +67,7 @@
 <header>
   <div style="display:flex; align-items:center; gap:10px;">
     <button class="btn" id="backBtn">⬅️ Retour</button>
-    <strong>📤 Import Factures (Table detector V2.1 + Réduction)</strong>
+    <strong>📤 Import Factures (V2.2)</strong>
   </div>
 
   <div class="authBox">
@@ -85,8 +81,8 @@
 
 <main>
   <div class="notice">
-    <div><strong>Objectif :</strong> détecter les services dans le tableau PDF (même si header éclaté), remplir la DB et surligner les infos utiles.</div>
-    <div class="muted small">✅ Table detector V2.1 • ✅ fusion wrap • ✅ colonne Réduction • ✅ fix description vide (120€) • ✅ “Voir” stable</div>
+    <div><strong>Objectif :</strong> extraction tableau stable + données propres (TVA/Total, desc vides, client sans adresse, totaux corrects).</div>
+    <div class="muted small">✅ Table detector V2.2 • ✅ Fix TVA→Total • ✅ Fix desc vide • ✅ Client clean • ✅ Totaux TTC correct • ✅ “Voir” stable</div>
   </div>
 
   <div id="globalMsg" class="msg warn" style="display:none; margin-bottom:14px;"></div>
@@ -130,7 +126,6 @@
   </div>
 </main>
 
-<!-- ✅ MODALE VIEWER -->
 <div id="textModal" style="
   position:fixed; inset:0; background:rgba(0,0,0,.5);
   align-items:center; justify-content:center; padding:18px;">
@@ -284,9 +279,8 @@
           if (lastWasSpace) continue;
           c = " ";
           lastWasSpace = true;
-        } else {
-          lastWasSpace = false;
-        }
+        } else lastWasSpace = false;
+
         norm += c.toLowerCase();
         map.push(i);
       }
@@ -359,7 +353,6 @@
       hl.push({ label: m.label, value: String(m.value) });
     }
 
-    // dedupe
     const seen = new Set();
     return hl.filter(x => {
       const key = x.label + "::" + x.value;
@@ -378,11 +371,13 @@
     const val = parseFloat(n.replace(/[^0-9.]/g, ""));
     return Number.isFinite(val) ? val : null;
   }
+
   function parsePercent(str) {
     if (!str) return null;
     const m = str.match(/(\d{1,3})\s*%/);
     return m ? parseInt(m[1], 10) : null;
   }
+
   function parseFrenchDateAny(dateStr) {
     if (!dateStr) return null;
 
@@ -420,28 +415,42 @@
   }
 
   // ------------------------------------------------------------
-  // Client clean (keep name, cut address)
+  // Client clean V2.2
   // ------------------------------------------------------------
   function cleanClientName(raw) {
     if (!raw) return null;
     let s = String(raw).replace(/\s+/g, " ").trim();
 
-    const stopMarkers = [" Conditions", " Adresse", " Pays", " Numéro", " Numero", " TVA"];
+    const stopMarkers = [" Conditions", " Adresse", " Pays", " Numéro", " Numero", " TVA", " Séjours", " Détail", " Detail"];
     for (const m of stopMarkers) {
       const idx = s.indexOf(m);
       if (idx > 2) { s = s.slice(0, idx).trim(); break; }
     }
+
+    s = s.replace(/\b(CS|BP)\b[\s\S]*$/i, "").trim();
+    s = s.replace(/\bCEDEX\b[\s\S]*$/i, "").trim();
+    s = s.replace(/\b\d+\s*(bis|ter)?\s+(rue|route|avenue|av\.?|allée|allee|chemin|cours|boulevard|bd|place|impasse|za|zone)\b[\s\S]*$/i, "").trim();
     s = s.replace(/\b\d{5}\b[\s\S]*$/g, "").trim();
     s = s.replace(/\b(France|Belgique|Suisse|Luxembourg)\b[\s\S]*$/i, "").trim();
+
+    // Remove double repeated name if identical halves
+    const parts = s.split(" ");
+    if (parts.length > 2) {
+      const mid = Math.floor(parts.length / 2);
+      const left = parts.slice(0, mid).join(" ");
+      const right = parts.slice(mid).join(" ");
+      if (left.trim() === right.trim()) s = left.trim();
+    }
+
     s = s.replace(/[,;:\-]+$/g, "").trim();
     return s.length >= 2 ? s : null;
   }
 
   // ------------------------------------------------------------
-  // Parse facture header/totaux
+  // Parse facture header/totaux (fix TTC écrasé)
   // ------------------------------------------------------------
   function parseInvoiceText(fullText) {
-    const out = { version:"parser_table_v21_reduction", parsed_at:new Date().toISOString(), fields:{}, matches:[] };
+    const out = { version:"parser_table_v22", parsed_at:new Date().toISOString(), fields:{}, matches:[] };
     const t = fullText || "";
 
     const mFact = t.match(/\bFacture\s+([A-Z]{2,6}-\d{3,4}-\d{2,})\b/i) || t.match(/\bFACT-\d{4}-\d{2,}\b/);
@@ -471,7 +480,7 @@
       }
     }
 
-    // Totaux
+    // Totaux robustes
     const mTotals1 = t.match(/Total\s*HT\s+TVA\s*\(\s*\d+%\s*\)\s+Total\s*TTC\s+([0-9\s.,]+)\s*€?\s+([0-9\s.,]+)\s*€?\s+([0-9\s.,]+)\s*€/i);
     if (mTotals1) {
       out.fields.total_ht = normalizeNumber(mTotals1[1]);
@@ -480,6 +489,7 @@
       out.matches.push({ label:"total_ht", value: mTotals1[1], raw: mTotals1[0] });
       out.matches.push({ label:"total_tva", value: mTotals1[2], raw: mTotals1[0] });
       out.matches.push({ label:"total_ttc", value: mTotals1[3], raw: mTotals1[0] });
+      return out; // ✅ IMPORTANT : éviter écrasement par fallback
     }
 
     const mHT = t.match(/Total\s*HT\s*[:\s]\s*([0-9\s.,]+)\s*€/i);
@@ -493,20 +503,16 @@
   }
 
   // ------------------------------------------------------------
-  // ✅ TABLE DETECTOR V2.1 (supports Réduction + fix desc vide)
+  // ✅ TABLE DETECTOR V2.2
   // ------------------------------------------------------------
   function groupItemsIntoLines(items, baseTolerance = 3.2) {
     const sorted = [...items].sort((a,b) => b.y - a.y);
-
     const lines = [];
+
     for (const it of sorted) {
       const tol = Math.max(baseTolerance, (it.h || 0) * 0.35);
-
       let line = lines.find(l => Math.abs(l.y - it.y) <= tol);
-      if (!line) {
-        line = { y: it.y, items: [], tol };
-        lines.push(line);
-      }
+      if (!line) { line = { y: it.y, items: [], tol }; lines.push(line); }
       line.items.push(it);
     }
 
@@ -535,9 +541,7 @@
       const s = (l.text || "").toLowerCase();
       let score = 0;
       for (const kw of KEYWORDS) if (kw.k.some(x => s.includes(x))) score++;
-      if (score >= 3) {
-        if (!best || score > best.score) best = { line:l, score };
-      }
+      if (score >= 3) if (!best || score > best.score) best = { line:l, score };
     }
 
     if (!best) return { found:false, hasReduc:false, xType:0, xDesc:90, xPU:360, xQty:470, xTVA:540, xReduc:585, xTotal:650 };
@@ -589,21 +593,61 @@
     return cells;
   }
 
-  // ✅ fallback to recover desc when desc is empty but raw has text (fix line "120€")
+  // ✅ Fix TVA column containing money and missing total
+  function fixRowMoneyColumns(row) {
+    if ((!row.total || row.total.trim() === "") && row.tva) {
+      const m = row.tva.match(/([0-9][0-9\s]*[,\.]\d{2})\s*€?/);
+      if (m) {
+        const money = m[1].trim() + " €";
+        row.total = money;
+        row.tva = row.tva.replace(m[0], "").replace(/\s+/g," ").trim();
+      }
+    }
+    if (row.tva) {
+      const mp = row.tva.match(/(\d{1,3}\s*%)/);
+      row.tva = mp ? mp[1] : row.tva;
+    }
+    return row;
+  }
+
   function recoverDescFromRaw(raw, row) {
     let s = raw || "";
     s = s.replace(/^Service\s*/i, "").trim();
-    // remove known cells (best effort)
+
     const removeList = [row.pu, row.qty, row.tva, row.reduc, row.total].filter(Boolean);
     for (const part of removeList) {
       const esc = part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       s = s.replace(new RegExp(esc, "g"), " ").trim();
     }
-    // remove repeated % leftovers
-    s = s.replace(/\b\d{1,3}\s*%\b/g, (m) => m); // keep if it's actually part of desc
-    // remove trailing numeric garbage (e.g. qty alone)
+
     s = s.replace(/\s+/g, " ").trim();
     return s;
+  }
+
+  // ✅ Fix empty descriptions by splitting prev row if it contains 2+ dates
+  function postFixEmptyDescriptions(services) {
+    for (let i = 1; i < services.length; i++) {
+      const cur = services[i];
+      const prev = services[i - 1];
+
+      const curNoDesc = (!cur.desc || cur.desc.trim().length < 3);
+      const curHasMoney = (cur.pu || cur.total);
+      if (!curNoDesc || !curHasMoney) continue;
+
+      const prevDesc = prev.desc || "";
+      const dateMatches = prevDesc.match(/\b\d{2}\/\d{2}\/\d{4}\b/g);
+      if (dateMatches && dateMatches.length >= 2) {
+        const second = dateMatches[1];
+        const idx = prevDesc.indexOf(second);
+        if (idx > 0) {
+          const part1 = prevDesc.slice(0, idx).trim();
+          const part2 = prevDesc.slice(idx).trim();
+          prev.desc = part1;
+          cur.desc = part2;
+        }
+      }
+    }
+    return services;
   }
 
   function extractPdfTableFromTextContent(textContent) {
@@ -634,7 +678,6 @@
 
     const services = [];
     const debours = [];
-
     const hasMoney = (s) => /[0-9]\s*[0-9\s]*[,\.]\d{2}/.test(s) || (/€/.test(s) && /\d/.test(s));
     const hasPercent = (s) => /\b\d{1,3}\s*%/.test(s);
 
@@ -647,8 +690,8 @@
       if (/débours/i.test(raw)) { debours.push(raw); lastService = null; continue; }
 
       const row = lineToRow(l, cols);
+      fixRowMoneyColumns(row);
 
-      // 1) merge wrap: description continuation line (no money)
       const looksLikeContinuation =
         !row.type && row.desc && !hasMoney(row.pu) && !hasMoney(row.total) && !hasPercent(row.tva) && !hasPercent(row.reduc);
 
@@ -657,23 +700,21 @@
         continue;
       }
 
-      // 2) detect service
       const isService =
         /service/i.test(row.type) ||
         (row.desc && (hasMoney(row.total) || hasMoney(row.pu)) && (row.qty || hasPercent(row.tva)));
 
       if (isService) {
-        // ✅ FIX: if desc empty but raw has text → rebuild desc
         if ((!row.desc || row.desc.length < 3) && raw) {
           const fallback = recoverDescFromRaw(raw, row);
-          // avoid pure numeric desc
           if (fallback && /[A-Za-zÀ-ÿ]/.test(fallback)) row.desc = fallback;
         }
-
         services.push(row);
         lastService = row;
       }
     }
+
+    postFixEmptyDescriptions(services);
 
     return {
       services,
@@ -691,7 +732,6 @@
   }
 
   function renderPdfTableHtml(services, debours, hasReduc) {
-    // show reduction column if detected or if any row has reduc
     const showReduc = !!hasReduc || services.some(r => (r.reduc || "").includes("%"));
 
     let html = `<table class="tablePdf">
@@ -721,7 +761,7 @@
   }
 
   // ------------------------------------------------------------
-  // Parse lines from table rows -> DB + matches
+  // Parse LINES from TABLE rows -> DB + matches
   // ------------------------------------------------------------
   function parseLinesFromTable(tablePages, parserOut) {
     const lines = [];
@@ -729,12 +769,10 @@
 
     const allServices = [];
     const allDeboursRaw = [];
-    let anyReduc = false;
 
     for (const p of (tablePages || [])) {
       if (p?.services) allServices.push(...p.services);
       if (p?.debours) allDeboursRaw.push(...p.debours);
-      if (p?.debug?.hasReduc) anyReduc = true;
     }
 
     for (const r of allServices) {
@@ -776,7 +814,6 @@
       };
       lines.push(obj);
 
-      // matches pour surlignage
       if (parserOut?.matches) {
         parserOut.matches.push({ label:"service_desc", value: cleanDesc, raw: cleanDesc });
         if (r.total) parserOut.matches.push({ label:"service_total_raw", value: r.total, raw: r.total });
@@ -850,7 +887,7 @@
   }
 
   // ------------------------------------------------------------
-  // ✅ Event delegation (FIX: boutons "Voir" stables)
+  // ✅ Event delegation (boutons stables)
   // ------------------------------------------------------------
   filesTbody.addEventListener("click", async (e) => {
     const btn = e.target.closest("button[data-action]");
@@ -1030,7 +1067,6 @@
     if (fullText.length < 30) throw new Error("Texte extrait vide/trop court (PDF scan ?)");
 
     const parsed = parseInvoiceText(fullText);
-
     parsed.table = tablePages;
     parsed.lines = parseLinesFromTable(tablePages, parsed);
 
@@ -1054,7 +1090,6 @@
     const { error: updErr } = await sb.from("factures").update(payload).eq("id", item.factureId);
     if (updErr) throw updErr;
 
-    // Insert DB lines
     const services = parsed.lines.filter(l => l.type === "service");
     const debours = parsed.lines.filter(l => l.type === "debours");
 
