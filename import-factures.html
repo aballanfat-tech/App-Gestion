@@ -58,6 +58,24 @@
     .tablePdf td.desc { white-space:normal; min-width:420px; }
     .tablePdf th { background:#f7f7f7; font-size:12px; text-transform:uppercase; letter-spacing:.03em; }
     .rowDebours td { background:#fff7d6; font-weight:600; }
+
+    /* ✅ Sous-trajets */
+    .subTripsWrap { display:none; margin-top:8px; }
+    .subTripsWrap.open { display:block; }
+    .subTripsTable {
+      width:100%;
+      border-collapse: collapse;
+      border:1px solid #eee;
+      border-radius:12px;
+      overflow:hidden;
+      margin-top:8px;
+      background:#fafafa;
+      font-size:12px;
+    }
+    .subTripsTable th, .subTripsTable td { padding:7px 8px; border-bottom:1px solid #eee; }
+    .subTripsTable th { background:#f2f2f2; font-size:11px; text-transform:uppercase; letter-spacing:.03em; color:#666; }
+    .subPill { display:inline-block; font-size:11px; padding:3px 7px; border:1px solid #ddd; border-radius:999px; background:#fff; }
+    .btnMini { padding:6px 8px; font-size:12px; border-radius:9px; }
   </style>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
@@ -67,7 +85,7 @@
 <header>
   <div style="display:flex; align-items:center; gap:10px;">
     <button class="btn" id="backBtn">⬅️ Retour</button>
-    <strong>📤 Import Factures (V2.2.1)</strong>
+    <strong>📤 Import Factures (V2.3)</strong>
   </div>
 
   <div class="authBox">
@@ -81,8 +99,8 @@
 
 <main>
   <div class="notice">
-    <div><strong>Objectif :</strong> extraction tableau stable + données propres (client sans adresse, dates service même sans heure, PU arrondi).</div>
-    <div class="muted small">✅ V2.2.1 • ✅ Client cut "montée" • ✅ Date sans heure • ✅ PU arrondi 2 décimales</div>
+    <div><strong>Objectif :</strong> extraction tableau stable + données propres + <strong>sous-trajets détectés</strong> (heure / texte / pax).</div>
+    <div class="muted small">✅ V2.3 • ✅ Sous-trajets viewer • ✅ Heure auto • ✅ Client clean • ✅ Date service • ✅ PU arrondi</div>
   </div>
 
   <div id="globalMsg" class="msg warn" style="display:none; margin-bottom:14px;"></div>
@@ -261,6 +279,17 @@
   tabTextBtn.onclick = () => setTab("text");
   tabTableBtn.onclick = () => setTab("table");
 
+  // ✅ Toggle sous-trajets (event delegation dans le modal)
+  tableContent.addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-subtoggle]");
+    if (!btn) return;
+    const id = btn.getAttribute("data-subtoggle");
+    const wrap = document.getElementById(id);
+    if (!wrap) return;
+    wrap.classList.toggle("open");
+    btn.textContent = wrap.classList.contains("open") ? "🔼 Sous-trajets" : "🔽 Sous-trajets";
+  });
+
   // ------------------------------------------------------------
   // Highlight stable
   // ------------------------------------------------------------
@@ -414,8 +443,42 @@
     return { source_lieu: source, destination_lieu: destination };
   }
 
+  // ✅ V2.3 — Sous-trajets: extrait blocs "16h50 ... x 43 pers"
+  function extractSubTrips(desc) {
+    if (!desc) return [];
+    const txt = String(desc).replace(/\s+/g, " ").trim();
+
+    // Si aucune heure, aucun sous-trajet
+    if (!/\b\d{1,2}h\d{2}\b/.test(txt)) return [];
+
+    const trips = [];
+    const re = /(\b\d{1,2}h\d{2}\b)\s+(.+?)(?=(\b\d{1,2}h\d{2}\b)|$)/g;
+    let m;
+
+    while ((m = re.exec(txt)) !== null) {
+      const heure = m[1];
+      let chunk = (m[2] || "").replace(/\s+/g, " ").trim();
+
+      // pax : "x 43 pers" ou "43 pax"
+      let pax = null;
+      const mp = chunk.match(/\bx?\s*(\d{1,3})\s*(pax|pers|personnes)\b/i);
+      if (mp) pax = parseInt(mp[1], 10);
+
+      // nettoyage chunk : retirer pax
+      if (mp) chunk = chunk.replace(mp[0], "").replace(/\s+/g, " ").trim();
+
+      // retrait ponctuation inutile
+      chunk = chunk.replace(/^[,;:\-]+/, "").replace(/[,;:\-]+$/, "").trim();
+
+      trips.push({ heure, texte: chunk, pax });
+    }
+
+    // Heuristique: si on n'a qu’un seul bloc, ce n’est pas très utile -> on peut quand même garder.
+    return trips;
+  }
+
   // ------------------------------------------------------------
-  // Client clean V2.2.1 (montée / quai / passage)
+  // Client clean (V2.3 = même que V2.2.1)
   // ------------------------------------------------------------
   function cleanClientName(raw) {
     if (!raw) return null;
@@ -429,10 +492,7 @@
 
     s = s.replace(/\b(CS|BP)\b[\s\S]*$/i, "").trim();
     s = s.replace(/\bCEDEX\b[\s\S]*$/i, "").trim();
-
-    // ✅ expanded street words
     s = s.replace(/\b\d+\s*(bis|ter)?\s+(rue|route|avenue|av\.?|allée|allee|chemin|cours|boulevard|bd|place|impasse|za|zone|montée|montee|mont|quai|passage)\b[\s\S]*$/i, "").trim();
-
     s = s.replace(/\b\d{5}\b[\s\S]*$/g, "").trim();
     s = s.replace(/\b(France|Belgique|Suisse|Luxembourg)\b[\s\S]*$/i, "").trim();
 
@@ -450,10 +510,10 @@
   }
 
   // ------------------------------------------------------------
-  // Parse facture header/totaux (fix TTC écrasé)
+  // Parse facture header/totaux
   // ------------------------------------------------------------
   function parseInvoiceText(fullText) {
-    const out = { version:"parser_table_v221", parsed_at:new Date().toISOString(), fields:{}, matches:[] };
+    const out = { version:"parser_table_v23", parsed_at:new Date().toISOString(), fields:{}, matches:[] };
     const t = fullText || "";
 
     const mFact = t.match(/\bFacture\s+([A-Z]{2,6}-\d{3,4}-\d{2,})\b/i) || t.match(/\bFACT-\d{4}-\d{2,}\b/);
@@ -505,7 +565,7 @@
   }
 
   // ------------------------------------------------------------
-  // TABLE DETECTOR (unchanged from V2.2)
+  // Table detector (identique V2.2.1)
   // ------------------------------------------------------------
   function groupItemsIntoLines(items, baseTolerance = 3.2) {
     const sorted = [...items].sort((a,b) => b.y - a.y);
@@ -719,6 +779,7 @@
     };
   }
 
+  // ✅ V2.3: rendu tableau + sous-trajets dans la cellule Description
   function renderPdfTableHtml(services, debours, hasReduc) {
     const showReduc = !!hasReduc || services.some(r => (r.reduc || "").includes("%"));
 
@@ -727,17 +788,50 @@
         <th>Type</th><th>Description</th><th>PU HT</th><th>Qté</th><th>TVA</th>${showReduc ? "<th>Réduction</th>" : ""}<th>Total HT</th>
       </tr></thead><tbody>`;
 
-    for (const r of services) {
+    services.forEach((r, idx) => {
+      const id = `subTrips_${idx}_${Math.random().toString(16).slice(2)}`;
+      const trips = extractSubTrips(r.desc);
+
+      let descHtml = `<div>${escapeHtml(r.desc)}</div>`;
+
+      if (trips.length > 0) {
+        descHtml += `
+          <div style="margin-top:6px;">
+            <button class="btn btnMini" data-subtoggle="${id}">🔽 Sous-trajets</button>
+            <span class="subPill" style="margin-left:8px;">${trips.length} détecté(s)</span>
+          </div>
+          <div id="${id}" class="subTripsWrap">
+            <table class="subTripsTable">
+              <thead>
+                <tr><th>Heure</th><th>Destination / Texte</th><th>Pax</th></tr>
+              </thead>
+              <tbody>
+                ${trips.map(t => `
+                  <tr>
+                    <td><span class="subPill">${escapeHtml(t.heure || "")}</span></td>
+                    <td>${escapeHtml(t.texte || "")}</td>
+                    <td>${t.pax != null ? `<span class="subPill">${escapeHtml(String(t.pax))}</span>` : `<span class="muted">—</span>`}</td>
+                  </tr>
+                `).join("")}
+              </tbody>
+            </table>
+            <div class="muted small" style="margin-top:6px;">
+              💡 Ces sous-trajets sont informatifs : tu pourras ensuite les trier/ventiler et définir les prix toi-même.
+            </div>
+          </div>
+        `;
+      }
+
       html += `<tr>
         <td>${escapeHtml(r.type)}</td>
-        <td class="desc">${escapeHtml(r.desc)}</td>
+        <td class="desc">${descHtml}</td>
         <td>${escapeHtml(r.pu)}</td>
         <td>${escapeHtml(r.qty)}</td>
         <td>${escapeHtml(r.tva)}</td>
         ${showReduc ? `<td>${escapeHtml(r.reduc || "")}</td>` : ""}
         <td>${escapeHtml(r.total)}</td>
       </tr>`;
-    }
+    });
 
     if (debours.length > 0) {
       html += `<tr class="rowDebours"><td colspan="${showReduc ? 7 : 6}">Débours</td></tr>`;
@@ -749,7 +843,9 @@
   }
 
   // ------------------------------------------------------------
-  // ✅ Parse LINES from TABLE rows -> DB + matches (date sans heure + PU arrondi)
+  // Parse LINES from TABLE rows -> DB + matches
+  // ✅ V2.3: heure_service = première heure trouvée si absente
+  // ✅ V2.3: stock sub_trips (informatif) dans lines + flags
   // ------------------------------------------------------------
   function parseLinesFromTable(tablePages, parserOut) {
     const lines = [];
@@ -767,30 +863,39 @@
       const desc = (r.desc || "").trim();
       let dateRaw = null, heure = null, cleanDesc = desc;
 
-      // ✅ date seule
+      // date seule
       const mDateOnly = desc.match(/^(\d{2}\/\d{2}\/\d{4})\s*:\s*(.*)$/);
       if (mDateOnly) {
         dateRaw = mDateOnly[1];
         cleanDesc = (mDateOnly[2] || "").trim();
       }
 
-      // ✅ date + heure
-      const mDH = desc.match(/(\d{2}\/\d{2}\/\d{4})\s*:\s*([0-9]{1,2}h[0-9]{0,2})\s*(.*)/);
+      // date + heure
+      const mDH = desc.match(/(\d{2}\/\d{2}\/\d{4})\s*:\s*([0-9]{1,2}h[0-9]{2})\s*(.*)/);
       if (mDH) {
         dateRaw = mDH[1];
         heure = mDH[2];
         cleanDesc = (mDH[3] || "").trim() || cleanDesc;
       }
 
+      // ✅ V2.3: si pas d'heure détectée, prendre la première heure trouvée dans cleanDesc
+      if (!heure) {
+        const mh = cleanDesc.match(/\b(\d{1,2}h\d{2})\b/);
+        if (mh) heure = mh[1];
+      }
+
       const dateIso = dateRaw ? parseFrenchDateAny(dateRaw) : null;
       const { source_lieu, destination_lieu } = splitSourceDest(cleanDesc);
 
       const pu = normalizeNumber(r.pu);
-      const pu2 = (typeof pu === "number") ? Math.round(pu * 100) / 100 : pu; // ✅ arrondi
+      const pu2 = (typeof pu === "number") ? Math.round(pu * 100) / 100 : pu;
       const qty = parseInt((r.qty || "1").replace(/\D/g,""), 10) || 1;
       const tva = parsePercent(r.tva) || null;
       const reduc = parsePercent(r.reduc) || null;
       const total = normalizeNumber(r.total);
+
+      // ✅ V2.3: sous-trajets informatifs
+      const subTrips = extractSubTrips(cleanDesc);
 
       const obj = {
         type: "service",
@@ -806,6 +911,7 @@
         tva,
         reduction_percent: reduc,
         prix_total_ht: total,
+        sub_trips: subTrips, // informatif
         confidence: "high",
         source_text: JSON.stringify(r)
       };
@@ -822,18 +928,18 @@
       const mAmt = raw.match(/([0-9\s.,]+)\s*€\s*$/);
       const amountRaw = mAmt ? mAmt[1].trim() : null;
       const amount = amountRaw ? normalizeNumber(amountRaw) : null;
-      const desc = amountRaw ? raw.replace(mAmt[0], "").replace(/\s+/g," ").trim() : raw.trim();
+      const desc2 = amountRaw ? raw.replace(mAmt[0], "").replace(/\s+/g," ").trim() : raw.trim();
 
       lines.push({
         type: "debours",
         ligne_numero: idx++,
-        description_service: desc,
+        description_service: desc2,
         prix_total_ht: amount,
         confidence: "high",
         source_text: raw
       });
 
-      if (parserOut?.matches) parserOut.matches.push({ label:"debours_desc", value: desc, raw: raw });
+      if (parserOut?.matches) parserOut.matches.push({ label:"debours_desc", value: desc2, raw: raw });
     }
 
     return lines;
@@ -882,16 +988,25 @@
     }
   }
 
+  // ✅ Event delegation (boutons stables)
   filesTbody.addEventListener("click", async (e) => {
     const btn = e.target.closest("button[data-action]");
     if (!btn) return;
+
     const idx = Number(btn.getAttribute("data-index"));
     const action = btn.getAttribute("data-action");
     if (Number.isNaN(idx) || idx < 0 || idx >= state.files.length) return;
 
     try {
-      if (action === "remove") { state.files.splice(idx, 1); render(); return; }
-      if (action === "view") { await openViewer(idx); return; }
+      if (action === "remove") {
+        state.files.splice(idx, 1);
+        render();
+        return;
+      }
+      if (action === "view") {
+        await openViewer(idx);
+        return;
+      }
     } catch (err) {
       console.error("Button action failed:", err);
       setMsg("err", "Erreur bouton: " + (err?.message || err));
@@ -1093,7 +1208,11 @@
         tva: l.tva,
         reduction_percent: l.reduction_percent,
         prix_total_ht: l.prix_total_ht,
-        flags: { confidence:l.confidence, source_text:l.source_text }
+        flags: {
+          confidence: l.confidence,
+          source_text: l.source_text,
+          sub_trips: l.sub_trips || [] // ✅ V2.3 informatif
+        }
       }));
 
       const { error: lfErr } = await sb.from("lignes_factures").insert(rowsLF);
@@ -1113,7 +1232,7 @@
         tva: l.tva,
         reduction_percent: l.reduction_percent,
         total_ht: l.prix_total_ht,
-        flags: { confidence:l.confidence },
+        flags: { confidence:l.confidence, sub_trips: l.sub_trips || [] },
         status: "READY"
       }));
 
