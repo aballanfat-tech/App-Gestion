@@ -33,31 +33,11 @@
     .msg.err { border-color:#ffb3b3; background:#fff2f2; }
     .msg.warn { border-color:#f1d88a; background:#fff7d6; }
 
-    mark.hl { background:#ffe58f; padding:0 2px; border-radius:4px; }
-    .hlBox { display:flex; gap:10px; flex-wrap:wrap; padding:10px 12px; border:1px solid #eee; border-radius:12px; background:#fafafa; margin:10px 0; }
-    .hlTag { border:1px solid #ddd; border-radius:999px; padding:4px 8px; font-size:12px; background:#fff; }
-
     #textModal { display:none; pointer-events:none; z-index: 9999; }
     #textModal.open { display:flex !important; pointer-events:auto; }
 
-    .tablePdf {
-      width:100%;
-      border-collapse: collapse;
-      font-size:13px;
-      background:#fff;
-      border:1px solid #eee;
-      border-radius:12px;
-      overflow:hidden;
-    }
-    .tablePdf th, .tablePdf td {
-      border-bottom:1px solid #eee;
-      padding:8px 10px;
-      vertical-align:top;
-      white-space:nowrap;
-    }
-    .tablePdf td.desc { white-space:normal; min-width:420px; }
-    .tablePdf th { background:#f7f7f7; font-size:12px; text-transform:uppercase; letter-spacing:.03em; }
-    .rowDebours td { background:#fff7d6; font-weight:600; }
+    .hlBox { display:flex; gap:10px; flex-wrap:wrap; padding:10px 12px; border:1px solid #eee; border-radius:12px; background:#fafafa; margin:10px 0; }
+    .hlTag { border:1px solid #ddd; border-radius:999px; padding:4px 8px; font-size:12px; background:#fff; }
 
     .btnSmall {
       border:1px solid #ddd;
@@ -67,7 +47,6 @@
       cursor:pointer;
       font-size:12px;
     }
-    .btnSmall:disabled { opacity:.5; cursor:not-allowed; }
 
     /* EDIT ZONE */
     .editGrid {
@@ -150,7 +129,7 @@
 <header>
   <div style="display:flex; align-items:center; gap:10px;">
     <button class="btn" id="backBtn">⬅️ Retour</button>
-    <strong>📤 Import Factures (V2.6 – Edition complète + Tri lignes)</strong>
+    <strong>📤 Import Factures (V2.6.1 – Extraction restaurée + Edition)</strong>
   </div>
 
   <div class="authBox">
@@ -164,8 +143,8 @@
 
 <main>
   <div class="notice">
-    <div><strong>V2.6 :</strong> Edition complète des données extraites + Tri en lignes (A/B/C) avec ajout/suppression.</div>
-    <div class="muted small">✅ Autosave partout • ✅ Restore liste • ✅ Keepalive session</div>
+    <div><strong>V2.6.1 :</strong> Extraction PDF.js + parsing + DB + édition + tri en lignes.</div>
+    <div class="muted small">✅ autosave partout • ✅ restore liste • ✅ keepalive session</div>
   </div>
 
   <div id="globalMsg" class="msg warn" style="display:none; margin-bottom:14px;"></div>
@@ -179,7 +158,7 @@
       </div>
     </div>
     <div style="margin-top:12px; display:flex; gap:10px; flex-wrap:wrap;">
-      <button class="btn" id="startUploadBtn" disabled>🚀 Uploader & Traiter</button>
+      <button class="btn" id="startUploadBtn" disabled>🚀 Uploader & Extraire</button>
       <button class="btn" id="clearBtn" disabled>🧹 Vider la liste</button>
     </div>
     <div class="muted small" style="margin-top:10px;">
@@ -212,16 +191,13 @@
   </div>
 </main>
 
-<div id="textModal" style="
-  position:fixed; inset:0; background:rgba(0,0,0,.5);
-  align-items:center; justify-content:center; padding:18px;">
-  <div style="
-    width:min(1180px, 98vw); max-height:90vh; background:#fff; border-radius:14px;
-    border:1px solid #e5e5e5; overflow:hidden; display:flex; flex-direction:column;">
+<!-- Viewer / Editor modal -->
+<div id="textModal" style="position:fixed; inset:0; background:rgba(0,0,0,.5); align-items:center; justify-content:center; padding:18px;">
+  <div style="width:min(1180px, 98vw); max-height:90vh; background:#fff; border-radius:14px; border:1px solid #e5e5e5; overflow:hidden; display:flex; flex-direction:column;">
     <div style="display:flex; align-items:center; justify-content:space-between; padding:12px 14px; border-bottom:1px solid #eee;">
-      <strong>🧾 Viewer (Edition + Tableau + Texte)</strong>
+      <strong>🧾 Viewer (Edition)</strong>
       <div style="display:flex; gap:8px;">
-        <button class="btn" id="copyTextBtn">📋 Copier</button>
+        <button class="btn" id="copyTextBtn">📋 Copier texte</button>
         <button class="btn" id="closeTextBtn">✖ Fermer</button>
       </div>
     </div>
@@ -231,7 +207,6 @@
 
       <div style="display:flex; gap:8px; margin-bottom:10px;">
         <button class="btn" id="tabEditBtn">🟧 Edition</button>
-        <button class="btn" id="tabTableBtn">🟩 Tableau</button>
         <button class="btn" id="tabTextBtn">🟦 Texte</button>
       </div>
 
@@ -246,18 +221,8 @@
         <div id="editServices"></div>
       </div>
 
-      <div id="tableWrap" style="display:none;">
-        <div class="muted small" style="margin-bottom:8px;">
-          Tableau reconstruit depuis X/Y PDF. Debug : donnees_brutes.table_debug.
-        </div>
-        <div id="tableContent" style="overflow:auto;"></div>
-      </div>
-
       <div id="textWrap" style="display:none;">
-        <div id="textContent" style="
-          white-space:pre-wrap; word-break:break-word;
-          background:#fafafa; border:1px solid #eee; border-radius:12px;
-          padding:12px; font-size:13px; line-height:1.35;"></div>
+        <div id="textContent" style="white-space:pre-wrap; word-break:break-word; background:#fafafa; border:1px solid #eee; border-radius:12px; padding:12px; font-size:13px; line-height:1.35;"></div>
       </div>
     </div>
   </div>
@@ -267,7 +232,11 @@
 <script src="./supabase-services.js"></script>
 
 <script>
-  const APP_VERSION = "v26";
+  // ============================================================
+  // V2.6.1 - UI V2.6 + Extraction V2.5 restaurée
+  // ============================================================
+
+  const APP_VERSION = "v261";
   const LS_KEY = "import_factures_state_" + APP_VERSION;
 
   const MAX_FILES = 20;
@@ -295,11 +264,8 @@
   const textMeta = document.getElementById("textMeta");
   const tabEditBtn = document.getElementById("tabEditBtn");
   const tabTextBtn = document.getElementById("tabTextBtn");
-  const tabTableBtn = document.getElementById("tabTableBtn");
   const editWrap = document.getElementById("editWrap");
-  const tableWrap = document.getElementById("tableWrap");
   const textWrap = document.getElementById("textWrap");
-  const tableContent = document.getElementById("tableContent");
   const textContent = document.getElementById("textContent");
   const hlBox = document.getElementById("hlBox");
 
@@ -343,22 +309,56 @@
     return name.replace(/[^a-zA-Z0-9.\-_]/g, "_").replace(/_{2,}/g, "_");
   }
 
+  // ---------------------------
+  // Parsing helpers (V2.5)
+  // ---------------------------
   function normalizeNumber(str) {
-    if (str == null) return null;
-    const s = String(str).replace(/\s/g, "").replace(",", ".").replace(/[^0-9.]/g, "");
-    const n = parseFloat(s);
-    return Number.isFinite(n) ? n : null;
+    if (!str) return null;
+    const n = String(str).replace(/\s/g, "").replace(",", ".");
+    const val = parseFloat(n.replace(/[^0-9.]/g, ""));
+    return Number.isFinite(val) ? val : null;
+  }
+
+  function parsePercent(str) {
+    if (!str) return null;
+    const m = String(str).match(/(\d{1,3})\s*%/);
+    return m ? parseInt(m[1], 10) : null;
   }
 
   function parseFrenchDateAny(dateStr) {
     if (!dateStr) return null;
-    const mNum = dateStr.match(/(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/);
+
+    const mNum = String(dateStr).match(/(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/);
     if (mNum) {
       let d = parseInt(mNum[1],10), mo = parseInt(mNum[2],10), y = parseInt(mNum[3],10);
       if (y < 100) y += 2000;
       return `${y.toString().padStart(4,"0")}-${mo.toString().padStart(2,"0")}-${d.toString().padStart(2,"0")}`;
     }
+
+    const months = {
+      "janvier":1, "février":2, "fevrier":2, "mars":3, "avril":4, "mai":5, "juin":6,
+      "juillet":7, "août":8, "aout":8, "septembre":9, "octobre":10, "novembre":11,
+      "décembre":12, "decembre":12
+    };
+
+    const mTxt = String(dateStr).toLowerCase().match(/(\d{1,2})\s+(janvier|février|fevrier|mars|avril|mai|juin|juillet|août|aout|septembre|octobre|novembre|décembre|decembre)\s+(\d{4})/);
+    if (mTxt) {
+      const d = parseInt(mTxt[1],10);
+      const mo = months[mTxt[2]];
+      const y = parseInt(mTxt[3],10);
+      if (!mo) return null;
+      return `${y.toString().padStart(4,"0")}-${String(mo).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+    }
     return null;
+  }
+
+  function splitSourceDest(desc) {
+    let source = null, destination = null;
+    const mFromTo = String(desc||"").match(/de\s+(.+?)\s+à\s+(.+)/i);
+    if (mFromTo) { source = mFromTo[1].trim(); destination = mFromTo[2].trim(); }
+    const mArrow = String(desc||"").match(/(.+?)\s*(?:=>|>\s*=>?|=\s*>)\s*(.+)/);
+    if (mArrow) { source = source || mArrow[1].trim(); destination = destination || mArrow[2].trim(); }
+    return { source_lieu: source, destination_lieu: destination };
   }
 
   function extractSubTrips(desc) {
@@ -379,6 +379,394 @@
     return trips;
   }
 
+  function cleanClientName(raw) {
+    if (!raw) return null;
+    let s = String(raw).replace(/\s+/g, " ").trim();
+
+    const stopMarkers = [" Conditions", " Adresse", " Pays", " Numéro", " Numero", " TVA", " Séjours", " Détail", " Detail"];
+    for (const m of stopMarkers) {
+      const idx = s.indexOf(m);
+      if (idx > 2) { s = s.slice(0, idx).trim(); break; }
+    }
+    s = s.replace(/\b(CS|BP)\b[\s\S]*$/i, "").trim();
+    s = s.replace(/\bCEDEX\b[\s\S]*$/i, "").trim();
+    s = s.replace(/\b\d+\s*(bis|ter)?\s+(rue|route|avenue|av\.?|allée|allee|chemin|cours|boulevard|bd|place|impasse|za|zone|montée|montee|mont|quai|passage)\b[\s\S]*$/i, "").trim();
+    s = s.replace(/\b\d{5}\b[\s\S]*$/g, "").trim();
+    s = s.replace(/\b(France|Belgique|Suisse|Luxembourg)\b[\s\S]*$/i, "").trim();
+
+    const parts = s.split(" ");
+    if (parts.length > 2) {
+      const mid = Math.floor(parts.length / 2);
+      const left = parts.slice(0, mid).join(" ");
+      const right = parts.slice(mid).join(" ");
+      if (left.trim() === right.trim()) s = left.trim();
+    }
+    s = s.replace(/[,;:\-]+$/g, "").trim();
+    return s.length >= 2 ? s : null;
+  }
+
+  function parseInvoiceText(fullText) {
+    const out = { version:"parser_table_v261", parsed_at:new Date().toISOString(), fields:{}, matches:[] };
+    const t = fullText || "";
+
+    const mFact = t.match(/\bFacture\s+([A-Z]{2,6}-\d{3,4}-\d{2,})\b/i) || t.match(/\bFACT-\d{4}-\d{2,}\b/);
+    if (mFact) {
+      const val = (mFact[1] || mFact[0]).trim();
+      out.fields.numero_facture = val;
+      out.matches.push({ label:"numero_facture", value: val, raw: mFact[0] });
+    }
+
+    const mDateTxt = t.match(/\b(\d{1,2}\s+(janvier|février|fevrier|mars|avril|mai|juin|juillet|août|aout|septembre|octobre|novembre|décembre|decembre)\s+\d{4})\b/i);
+    if (mDateTxt) {
+      const rawDate = mDateTxt[1].trim();
+      const iso = parseFrenchDateAny(rawDate);
+      if (iso) {
+        out.fields.date_facture = iso;
+        out.matches.push({ label:"date_facture", value: rawDate, raw: rawDate });
+      }
+    }
+
+    const mDest = t.match(/Destinataire\s+([\s\S]+?)\s+(Conditions|Séjours|Détail|Detail)/i);
+    if (mDest) {
+      const rawClientBlock = mDest[1].replace(/\s+/g," ").trim();
+      const clean = cleanClientName(rawClientBlock);
+      if (clean) {
+        out.fields.client_nom = clean;
+        out.matches.push({ label:"client_nom", value: clean, raw: rawClientBlock });
+      }
+    }
+
+    const mTotals1 = t.match(/Total\s*HT\s+TVA\s*\(\s*\d+%\s*\)\s+Total\s*TTC\s+([0-9\s.,]+)\s*€?\s+([0-9\s.,]+)\s*€?\s+([0-9\s.,]+)\s*€/i);
+    if (mTotals1) {
+      out.fields.total_ht = normalizeNumber(mTotals1[1]);
+      out.fields.total_tva = normalizeNumber(mTotals1[2]);
+      out.fields.total_ttc = normalizeNumber(mTotals1[3]);
+      out.matches.push({ label:"total_ht", value: mTotals1[1], raw: mTotals1[0] });
+      out.matches.push({ label:"total_tva", value: mTotals1[2], raw: mTotals1[0] });
+      out.matches.push({ label:"total_ttc", value: mTotals1[3], raw: mTotals1[0] });
+      return out;
+    }
+
+    const mHT = t.match(/Total\s*HT\s*[:\s]\s*([0-9\s.,]+)\s*€/i);
+    const mTVA = t.match(/\bTVA\s*[:\s]\s*([0-9\s.,]+)\s*€/i);
+    const mTTC = t.match(/Total\s*TTC\s*[:\s]\s*([0-9\s.,]+)\s*€/i);
+    if (mHT) { out.fields.total_ht = normalizeNumber(mHT[1]); out.matches.push({ label:"total_ht", value:mHT[1], raw:mHT[0] }); }
+    if (mTVA) { out.fields.total_tva = normalizeNumber(mTVA[1]); out.matches.push({ label:"total_tva", value:mTVA[1], raw:mTVA[0] }); }
+    if (mTTC) { out.fields.total_ttc = normalizeNumber(mTTC[1]); out.matches.push({ label:"total_ttc", value:mTTC[1], raw:mTTC[0] }); }
+
+    return out;
+  }
+
+  // ---------------------------
+  // Table detector (V2.5)
+  // ---------------------------
+  function groupItemsIntoLines(items, baseTolerance = 3.2) {
+    const sorted = [...items].sort((a,b) => b.y - a.y);
+    const lines = [];
+    for (const it of sorted) {
+      const tol = Math.max(baseTolerance, (it.h || 0) * 0.35);
+      let line = lines.find(l => Math.abs(l.y - it.y) <= tol);
+      if (!line) { line = { y: it.y, items: [], tol }; lines.push(line); }
+      line.items.push(it);
+    }
+    for (const l of lines) {
+      l.items.sort((a,b) => a.x - b.x);
+      l.text = l.items.map(i => i.str).join(" ").replace(/\s+/g," ").trim();
+    }
+    lines.sort((a,b) => b.y - a.y);
+    return lines;
+  }
+
+  function detectServiceColumnsFromHeader(lines) {
+    const KEYWORDS = [
+      { key:"type", k:["type"] },
+      { key:"desc", k:["description","détail","detail"] },
+      { key:"pu",   k:["prix","unitaire","pu"] },
+      { key:"qty",  k:["quantité","quantite","qté","qte","quant"] },
+      { key:"tva",  k:["tva"] },
+      { key:"reduc",k:["réduction","reduction"] },
+      { key:"total",k:["total"] }
+    ];
+
+    let best = null;
+    for (const l of lines) {
+      const s = (l.text || "").toLowerCase();
+      let score = 0;
+      for (const kw of KEYWORDS) if (kw.k.some(x => s.includes(x))) score++;
+      if (score >= 3) if (!best || score > best.score) best = { line:l, score };
+    }
+    if (!best) return { found:false, hasReduc:false, xType:0, xDesc:90, xPU:360, xQty:470, xTVA:540, xReduc:585, xTotal:650 };
+
+    const header = best.line;
+    function findX(tokens) {
+      const it = header.items.find(i => tokens.some(t => i.str.toLowerCase().includes(t)));
+      return it ? it.x : null;
+    }
+
+    const xDesc = findX(["description","détail","detail"]) ?? 120;
+    const xPU = findX(["prix"]) ?? 360;
+    const xQty = findX(["quant"]) ?? 470;
+    const xTVA = findX(["tva"]) ?? 540;
+
+    const xReducMaybe = findX(["réduction","reduction"]);
+    const hasReduc = xReducMaybe != null;
+
+    const xTotal = (() => {
+      const totals = header.items.filter(i => i.str.toLowerCase().includes("total"));
+      if (totals.length) return totals[totals.length - 1].x;
+      return 650;
+    })();
+    const xReduc = hasReduc ? xReducMaybe : Math.min(xTotal - 40, xTVA + 50);
+    return { found:true, headerY: header.y, hasReduc, xType:0, xDesc, xPU, xQty, xTVA, xReduc, xTotal };
+  }
+
+  function lineToRow(line, cols) {
+    const cells = { type:"", desc:"", pu:"", qty:"", tva:"", reduc:"", total:"" };
+    for (const it of line.items) {
+      const x = it.x;
+      const str = it.str;
+      if (x < cols.xDesc) cells.type += (cells.type ? " " : "") + str;
+      else if (x < cols.xPU) cells.desc += (cells.desc ? " " : "") + str;
+      else if (x < cols.xQty) cells.pu += (cells.pu ? " " : "") + str;
+      else if (x < cols.xTVA) cells.qty += (cells.qty ? " " : "") + str;
+      else if (cols.hasReduc && x < cols.xReduc) cells.tva += (cells.tva ? " " : "") + str;
+      else if (cols.hasReduc && x < cols.xTotal) cells.reduc += (cells.reduc ? " " : "") + str;
+      else if (!cols.hasReduc && x < cols.xTotal) cells.tva += (cells.tva ? " " : "") + str;
+      else cells.total += (cells.total ? " " : "") + str;
+    }
+    for (const k of Object.keys(cells)) cells[k] = cells[k].replace(/\s+/g," ").trim();
+    return cells;
+  }
+
+  function fixRowMoneyColumns(row) {
+    if ((!row.total || row.total.trim() === "") && row.tva) {
+      const m = row.tva.match(/([0-9][0-9\s]*[,\.]\d{2})\s*€?/);
+      if (m) {
+        const money = m[1].trim() + " €";
+        row.total = money;
+        row.tva = row.tva.replace(m[0], "").replace(/\s+/g, " ").trim();
+      }
+    }
+    if (row.tva) {
+      const mp = row.tva.match(/(\d{1,3}\s*%)/);
+      row.tva = mp ? mp[1] : row.tva;
+    }
+    return row;
+  }
+
+  function recoverDescFromRaw(raw, row) {
+    let s = raw || "";
+    s = s.replace(/^Service\s*/i, "").trim();
+    const removeList = [row.pu, row.qty, row.tva, row.reduc, row.total].filter(Boolean);
+    for (const part of removeList) {
+      const esc = part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      s = s.replace(new RegExp(esc, "g"), " ").trim();
+    }
+    s = s.replace(/\s+/g, " ").trim();
+    return s;
+  }
+
+  function postFixEmptyDescriptions(services) {
+    for (let i = 1; i < services.length; i++) {
+      const cur = services[i];
+      const prev = services[i - 1];
+      const curNoDesc = (!cur.desc || cur.desc.trim().length < 3);
+      const curHasMoney = (cur.pu || cur.total);
+      if (!curNoDesc || !curHasMoney) continue;
+
+      const prevDesc = prev.desc || "";
+      const dateMatches = prevDesc.match(/\b\d{2}\/\d{2}\/\d{4}\b/g);
+      if (dateMatches && dateMatches.length >= 2) {
+        const second = dateMatches[1];
+        const idx = prevDesc.indexOf(second);
+        if (idx > 0) {
+          prev.desc = prevDesc.slice(0, idx).trim();
+          cur.desc = prevDesc.slice(idx).trim();
+        }
+      }
+    }
+    return services;
+  }
+
+  function extractPdfTableFromTextContent(textContent) {
+    const items = textContent.items.map(it => ({
+      str: (it.str || "").trim(),
+      x: it.transform[4],
+      y: it.transform[5],
+      h: Math.abs(it.transform[3]) || it.height || 0
+    })).filter(it => it.str.length);
+
+    const lines = groupItemsIntoLines(items, 3.2);
+    const cols = detectServiceColumnsFromHeader(lines);
+
+    let tableStartIndex = 0;
+    if (cols.found) {
+      tableStartIndex = lines.findIndex(l => l.y === cols.headerY);
+      if (tableStartIndex < 0) tableStartIndex = 0;
+    }
+
+    const region = lines.slice(tableStartIndex + 1);
+    const stopRe = /(total\s*ht|total\s*ttc|page\s+\d+|ribs?|iban|bic|si[eè]ge\s+social|conditions)/i;
+
+    const tableLines = [];
+    for (const l of region) {
+      if (stopRe.test(l.text)) break;
+      tableLines.push(l);
+    }
+
+    const services = [];
+    const debours = [];
+    const hasMoney = (s) => /[0-9]\s*[0-9\s]*[,\.]\d{2}/.test(s) || (/€/.test(s) && /\d/.test(s));
+    const hasPercent = (s) => /\b\d{1,3}\s*%/.test(s);
+
+    let lastService = null;
+
+    for (const l of tableLines) {
+      const raw = l.text || "";
+      if (!raw) continue;
+      if (/débours/i.test(raw)) { debours.push(raw); lastService = null; continue; }
+
+      const row = lineToRow(l, cols);
+      fixRowMoneyColumns(row);
+
+      const looksLikeContinuation =
+        !row.type && row.desc && !hasMoney(row.pu) && !hasMoney(row.total) && !hasPercent(row.tva) && !hasPercent(row.reduc);
+
+      if (looksLikeContinuation && lastService) {
+        lastService.desc = (lastService.desc + " " + row.desc).replace(/\s+/g," ").trim();
+        continue;
+      }
+
+      const isService =
+        /service/i.test(row.type) ||
+        (row.desc && (hasMoney(row.total) || hasMoney(row.pu)) && (row.qty || hasPercent(row.tva)));
+
+      if (isService) {
+        if ((!row.desc || row.desc.length < 3) && raw) {
+          const fallback = recoverDescFromRaw(raw, row);
+          if (fallback && /[A-Za-zÀ-ÿ]/.test(fallback)) row.desc = fallback;
+        }
+        services.push(row);
+        lastService = row;
+      }
+    }
+
+    postFixEmptyDescriptions(services);
+
+    return {
+      services,
+      debours,
+      cols,
+      debug: {
+        headerFound: cols.found,
+        hasReduc: cols.hasReduc,
+        headerY: cols.headerY || null,
+        totalLines: lines.length,
+        tableLines: tableLines.length,
+        servicesDetected: services.length
+      }
+    };
+  }
+
+  function parseLinesFromTable(tablePages, parserOut) {
+    const lines = [];
+    let idx = 1;
+
+    const allServices = [];
+    const allDeboursRaw = [];
+
+    for (const p of (tablePages || [])) {
+      if (p?.services) allServices.push(...p.services);
+      if (p?.debours) allDeboursRaw.push(...p.debours);
+    }
+
+    for (const r of allServices) {
+      const desc = (r.desc || "").trim();
+      let dateRaw = null, heure = null, cleanDesc = desc;
+
+      const mDateOnly = desc.match(/^(\d{2}\/\d{2}\/\d{4})\s*:\s*(.*)$/);
+      if (mDateOnly) {
+        dateRaw = mDateOnly[1];
+        cleanDesc = (mDateOnly[2] || "").trim();
+      }
+
+      const mDH = desc.match(/(\d{2}\/\d{2}\/\d{4})\s*:\s*([0-9]{1,2}h[0-9]{0,2})\s*(.*)/);
+      if (mDH) {
+        dateRaw = mDH[1];
+        heure = mDH[2];
+        cleanDesc = (mDH[3] || "").trim() || cleanDesc;
+      }
+
+      if (!heure) {
+        const mh = cleanDesc.match(/\b(\d{1,2}h\d{2})\b/);
+        if (mh) heure = mh[1];
+      }
+
+      const dateIso = dateRaw ? parseFrenchDateAny(dateRaw) : null;
+      const { source_lieu, destination_lieu } = splitSourceDest(cleanDesc);
+
+      const pu = normalizeNumber(r.pu);
+      const qty = parseInt((r.qty || "1").replace(/\D/g,""), 10) || 1;
+      const tva = parsePercent(r.tva) || null;
+      const reduc = parsePercent(r.reduc) || null;
+      const total = normalizeNumber(r.total);
+
+      const sub_trips = extractSubTrips(cleanDesc);
+
+      const obj = {
+        type: "service",
+        ligne_numero: idx++,
+        date_service_raw: dateRaw,
+        date_service: dateIso,
+        heure_service: heure,
+        description_service: cleanDesc,
+        source_lieu,
+        destination_lieu,
+        prix_unitaire_ht: pu,
+        quantite: qty,
+        tva,
+        reduction_percent: reduc,
+        prix_total_ht: total,
+        confidence: "high",
+        source_text: JSON.stringify(r),
+        sub_trips,
+        sub_trips_edit: sub_trips.map(x => ({...x})),
+        tri_rows: sub_trips.map(x => ({ dest:0, heure:x.heure||"", texte:x.texte||"", pax:x.pax ?? null })),
+        tri_meta: { names:["A","B","C"], prices:{a:null,b:null,c:null} }
+      };
+      lines.push(obj);
+
+      if (parserOut?.matches) {
+        parserOut.matches.push({ label:"service_desc", value: cleanDesc, raw: cleanDesc });
+        if (r.total) parserOut.matches.push({ label:"service_total_raw", value: r.total, raw: r.total });
+        if (r.pu) parserOut.matches.push({ label:"service_pu_raw", value: r.pu, raw: r.pu });
+      }
+    }
+
+    for (const raw of allDeboursRaw) {
+      const mAmt = raw.match(/([0-9\s.,]+)\s*€\s*$/);
+      const amountRaw = mAmt ? mAmt[1].trim() : null;
+      const amount = amountRaw ? normalizeNumber(amountRaw) : null;
+      const desc2 = amountRaw ? raw.replace(mAmt[0], "").replace(/\s+/g," ").trim() : raw.trim();
+
+      lines.push({
+        type: "debours",
+        ligne_numero: idx++,
+        description_service: desc2,
+        prix_total_ht: amount,
+        confidence: "high",
+        source_text: raw
+      });
+
+      if (parserOut?.matches) parserOut.matches.push({ label:"debours_desc", value: desc2, raw: raw });
+    }
+
+    return lines;
+  }
+
+  // ---------------------------
+  // localStorage restore/save list
+  // ---------------------------
   function saveListStateToLocalStorage() {
     try {
       const compact = state.files
@@ -411,11 +799,12 @@
         error: null
       }));
       return true;
-    } catch {
-      return false;
-    }
+    } catch { return false; }
   }
 
+  // ---------------------------
+  // UI render list
+  // ---------------------------
   function render() {
     selectedCount.textContent = String(state.files.length);
 
@@ -437,7 +826,7 @@
       const pill = (() => {
         if (item.status === "ready") return `<span class="pill">prêt</span>`;
         if (item.status === "uploading") return `<span class="pill">upload…</span>`;
-        if (item.status === "extracting") return `<span class="pill">traitement…</span>`;
+        if (item.status === "extracting") return `<span class="pill">extraction…</span>`;
         if (item.status === "extracted") return `<span class="pill ok">OK</span>`;
         if (item.status === "error") return `<span class="pill err">erreur</span>`;
         return `<span class="pill">${escapeHtml(item.status || "—")}</span>`;
@@ -469,17 +858,13 @@
     const action = btn.getAttribute("data-action");
     if (Number.isNaN(idx) || idx < 0 || idx >= state.files.length) return;
 
-    if (action === "remove") {
-      state.files.splice(idx, 1);
-      render();
-      return;
-    }
-    if (action === "view") {
-      await openViewer(idx);
-      return;
-    }
+    if (action === "remove") { state.files.splice(idx, 1); render(); return; }
+    if (action === "view") { await openViewer(idx); return; }
   });
 
+  // ---------------------------
+  // Drop / file input
+  // ---------------------------
   function addFiles(fileList) {
     const incoming = Array.from(fileList);
     for (const file of incoming) {
@@ -500,15 +885,14 @@
     if (e.dataTransfer?.files) addFiles(e.dataTransfer.files);
   });
 
-  document.getElementById("clearBtn").onclick = () => {
-    state.files = state.files.filter(it => it.kind === "saved");
-    render();
-  };
+  clearBtn.onclick = () => { state.files = state.files.filter(it => it.kind === "saved"); render(); };
 
+  // ---------------------------
+  // Modal + Tabs
+  // ---------------------------
   function closeModal() {
     textModal.classList.remove("open");
-    textContent.innerHTML = "";
-    tableContent.innerHTML = "";
+    textContent.textContent = "";
     hlBox.innerHTML = "";
     editHeader.innerHTML = "";
     editServices.innerHTML = "";
@@ -522,21 +906,23 @@
 
   function setTab(which) {
     editWrap.style.display = (which === "edit") ? "block" : "none";
-    tableWrap.style.display = (which === "table") ? "block" : "none";
     textWrap.style.display = (which === "text") ? "block" : "none";
   }
   tabEditBtn.onclick = () => setTab("edit");
-  tabTableBtn.onclick = () => setTab("table");
   tabTextBtn.onclick = () => setTab("text");
 
   copyTextBtn.onclick = async () => {
     await navigator.clipboard.writeText(textContent.textContent || "");
     copyTextBtn.textContent = "✅ Copié";
-    setTimeout(() => copyTextBtn.textContent = "📋 Copier", 900);
+    setTimeout(() => copyTextBtn.textContent = "📋 Copier texte", 900);
   };
 
+  // ---------------------------
+  // Autosave edited data -> factures
+  // ---------------------------
   function scheduleAutosave(reason="change") {
     if (!viewerFactureId || !viewerDonneesBrutes) return;
+
     clearTimeout(autosaveTimer);
     autosaveTimer = setTimeout(async () => {
       if (!sessionOk) {
@@ -544,7 +930,6 @@
         return;
       }
       try {
-        // sync top-level fields in table factures too
         const f = viewerDonneesBrutes.fields || {};
         const payload = {
           donnees_brutes: viewerDonneesBrutes,
@@ -555,11 +940,10 @@
           total_tva: (typeof f.total_tva==="number") ? f.total_tva : null,
           total_ttc: (typeof f.total_ttc==="number") ? f.total_ttc : null
         };
-
         const { error } = await sb.from("factures").update(payload).eq("id", viewerFactureId);
         if (error) throw error;
         setMsg("ok", "✅ Autosave (" + reason + ")");
-        setTimeout(() => setMsg("", ""), 1000);
+        setTimeout(() => setMsg("", ""), 900);
       } catch (e) {
         console.error(e);
         setMsg("err", "❌ Autosave impossible: " + (e?.message || e));
@@ -567,53 +951,30 @@
     }, 900);
   }
 
-  // ---------- EDIT UI RENDERING ----------
+  // ---------------------------
+  // Editor render
+  // ---------------------------
   function renderEditHeader() {
     const f = viewerDonneesBrutes.fields || (viewerDonneesBrutes.fields = {});
     editHeader.innerHTML = `
-      <div>
-        <div class="label">Numéro facture</div>
-        <input data-h="numero_facture" value="${escapeHtml(f.numero_facture || "")}">
-      </div>
-      <div>
-        <div class="label">Date facture (YYYY-MM-DD)</div>
-        <input data-h="date_facture" value="${escapeHtml(f.date_facture || "")}">
-      </div>
-      <div class="editFull">
-        <div class="label">Nom client (sans adresse)</div>
-        <input data-h="client_nom" value="${escapeHtml(f.client_nom || "")}">
-      </div>
-      <div>
-        <div class="label">Total HT</div>
-        <input data-h="total_ht" value="${escapeHtml(f.total_ht != null ? String(f.total_ht) : "")}">
-      </div>
-      <div>
-        <div class="label">Total TVA</div>
-        <input data-h="total_tva" value="${escapeHtml(f.total_tva != null ? String(f.total_tva) : "")}">
-      </div>
-      <div>
-        <div class="label">Total TTC</div>
-        <input data-h="total_ttc" value="${escapeHtml(f.total_ttc != null ? String(f.total_ttc) : "")}">
-      </div>
+      <div><div class="label">Numéro facture</div><input data-h="numero_facture" value="${escapeHtml(f.numero_facture || "")}"></div>
+      <div><div class="label">Date facture (YYYY-MM-DD)</div><input data-h="date_facture" value="${escapeHtml(f.date_facture || "")}"></div>
+      <div class="editFull"><div class="label">Nom client (sans adresse)</div><input data-h="client_nom" value="${escapeHtml(f.client_nom || "")}"></div>
+      <div><div class="label">Total HT</div><input data-h="total_ht" value="${escapeHtml(f.total_ht != null ? String(f.total_ht) : "")}"></div>
+      <div><div class="label">Total TVA</div><input data-h="total_tva" value="${escapeHtml(f.total_tva != null ? String(f.total_tva) : "")}"></div>
+      <div><div class="label">Total TTC</div><input data-h="total_ttc" value="${escapeHtml(f.total_ttc != null ? String(f.total_ttc) : "")}"></div>
     `;
   }
 
   function renderTriRows(lineIndex, lineObj) {
-    // destination names + prices stored per line in tri_meta
-    if (!lineObj.tri_meta) {
-      lineObj.tri_meta = { names:["A","B","C"], prices:{a:null,b:null,c:null} };
-    }
-    if (!lineObj.tri_rows) {
-      // default from extracted sub_trips
-      const base = (lineObj.sub_trips_edit || lineObj.sub_trips || []);
-      lineObj.tri_rows = base.map(t => ({ dest:0, heure:t.heure||"", texte:t.texte||"", pax:t.pax ?? null }));
-    }
+    if (!lineObj.tri_meta) lineObj.tri_meta = { names:["A","B","C"], prices:{a:null,b:null,c:null} };
+    if (!lineObj.tri_rows) lineObj.tri_rows = [];
 
     const m = lineObj.tri_meta;
     const names = m.names || ["A","B","C"];
     const prices = m.prices || {a:null,b:null,c:null};
+    const rows = lineObj.tri_rows || [];
 
-    const rows = (lineObj.tri_rows || []);
     const rowsHtml = rows.map((r, k) => `
       <tr>
         <td style="width:160px;">
@@ -626,9 +987,7 @@
         <td style="width:110px;"><input data-tri="heure" data-li="${lineIndex}" data-k="${k}" value="${escapeHtml(r.heure||"")}"></td>
         <td><input data-tri="texte" data-li="${lineIndex}" data-k="${k}" value="${escapeHtml(r.texte||"")}"></td>
         <td style="width:90px;"><input data-tri="pax" data-li="${lineIndex}" data-k="${k}" value="${escapeHtml(r.pax!=null?String(r.pax):"")}"></td>
-        <td style="width:120px;">
-          <button class="btnSmall" data-action="tri-del" data-li="${lineIndex}" data-k="${k}">✖</button>
-        </td>
+        <td style="width:120px;"><button class="btnSmall" data-action="tri-del" data-li="${lineIndex}" data-k="${k}">✖</button></td>
       </tr>
     `).join("");
 
@@ -656,40 +1015,31 @@
         </div>
 
         <table class="editTable">
-          <thead><tr>
-            <th>Destination</th><th>Heure</th><th>Texte</th><th>Pax</th><th></th>
-          </tr></thead>
-          <tbody>
-            ${rowsHtml || `<tr><td colspan="5" class="muted">Aucun sous-trajet. Clique “Ajouter”.</td></tr>`}
-          </tbody>
+          <thead><tr><th>Destination</th><th>Heure</th><th>Texte</th><th>Pax</th><th></th></tr></thead>
+          <tbody>${rowsHtml || `<tr><td colspan="5" class="muted">Aucun sous-trajet. Clique “Ajouter”.</td></tr>`}</tbody>
         </table>
-
-        <div class="muted small" style="margin-top:8px;">
-          ✅ Tout est autosauvegardé. Tu peux corriger / ajouter / supprimer librement.
-        </div>
       </div>
     `;
   }
 
   function renderEditServices() {
-    const lines = (viewerDonneesBrutes.lines || []).filter(l => l.type === "service");
+    const services = (viewerDonneesBrutes.lines || []).filter(l => l.type === "service");
 
-    let html = `
-      <table class="editTable">
-        <thead><tr>
-          <th style="width:60px;">#</th>
-          <th>Description</th>
-          <th style="width:110px;">PU</th>
-          <th style="width:70px;">Qté</th>
-          <th style="width:70px;">TVA</th>
-          <th style="width:110px;">Total</th>
-          <th style="width:140px;"></th>
-        </tr></thead>
-        <tbody>
-    `;
+    let html = `<table class="editTable">
+      <thead><tr>
+        <th style="width:60px;">#</th>
+        <th>Description</th>
+        <th style="width:110px;">PU</th>
+        <th style="width:70px;">Qté</th>
+        <th style="width:70px;">TVA</th>
+        <th style="width:110px;">Total</th>
+        <th style="width:160px;"></th>
+      </tr></thead><tbody>`;
 
-    lines.forEach((l, idx) => {
+    services.forEach((l, idx) => {
       if (!l.sub_trips_edit) l.sub_trips_edit = extractSubTrips(l.description_service || "");
+      if (!l.tri_rows) l.tri_rows = l.sub_trips_edit.map(x => ({ dest:0, heure:x.heure||"", texte:x.texte||"", pax:x.pax??null }));
+
       html += `
         <tr>
           <td>${escapeHtml(String(l.ligne_numero || (idx+1)))}</td>
@@ -703,13 +1053,7 @@
             <button class="btnSmall" data-action="del-service" data-li="${idx}">✖ Suppr</button>
           </td>
         </tr>
-        <tr>
-          <td colspan="7">
-            <div id="triBox-${idx}" style="display:none;">
-              ${renderTriRows(idx, l)}
-            </div>
-          </td>
-        </tr>
+        <tr><td colspan="7"><div id="triBox-${idx}" style="display:none;">${renderTriRows(idx, l)}</div></td></tr>
       `;
     });
 
@@ -717,26 +1061,22 @@
     editServices.innerHTML = html;
   }
 
-  // Handle edits (delegation)
+  // Editor events
   editWrap.addEventListener("input", (e) => {
     const t = e.target;
 
-    // header fields
+    // header
     if (t.matches("[data-h]")) {
       const key = t.getAttribute("data-h");
       const v = t.value;
-
       const f = viewerDonneesBrutes.fields || (viewerDonneesBrutes.fields = {});
-      if (key === "total_ht" || key === "total_tva" || key === "total_ttc") {
-        f[key] = normalizeNumber(v);
-      } else {
-        f[key] = v.trim();
-      }
+      if (key === "total_ht" || key === "total_tva" || key === "total_ttc") f[key] = normalizeNumber(v);
+      else f[key] = v.trim();
       scheduleAutosave("header");
       return;
     }
 
-    // service fields
+    // services
     if (t.matches("[data-s]")) {
       const k = t.getAttribute("data-s");
       const li = Number(t.getAttribute("data-li"));
@@ -746,7 +1086,7 @@
 
       if (k === "desc") {
         line.description_service = t.value;
-        // re-extract default sub trips (but only if user hasn’t edited manually)
+        // Re-extract sub_trips_edit but keep user edits if any
         if (!line.sub_trips_edit || line.sub_trips_edit.__auto) {
           const trips = extractSubTrips(t.value);
           trips.__auto = true;
@@ -755,7 +1095,7 @@
             line.tri_rows = trips.map(x => ({ dest:0, heure:x.heure||"", texte:x.texte||"", pax:x.pax??null }));
             line.tri_rows.__auto = true;
           }
-          renderEditServices(); // refresh tri rows
+          renderEditServices();
         }
       }
       if (k === "pu") line.prix_unitaire_ht = normalizeNumber(t.value);
@@ -767,7 +1107,7 @@
       return;
     }
 
-    // tri rows
+    // tri rows/meta
     if (t.matches("[data-tri],[data-tri-meta]")) {
       const li = Number(t.getAttribute("data-li"));
       const services = (viewerDonneesBrutes.lines || []).filter(l => l.type === "service");
@@ -810,7 +1150,6 @@
     const btn = e.target.closest("button[data-action]");
     if (!btn) return;
     const action = btn.getAttribute("data-action");
-
     const services = (viewerDonneesBrutes.lines || []).filter(l => l.type === "service");
 
     if (action === "toggle-tri") {
@@ -824,16 +1163,9 @@
       const all = viewerDonneesBrutes.lines || (viewerDonneesBrutes.lines = []);
       const maxNum = Math.max(0, ...all.filter(x=>x.type==="service").map(x=>x.ligne_numero||0));
       all.push({
-        type:"service",
-        ligne_numero: maxNum + 1,
-        description_service: "",
-        prix_unitaire_ht: null,
-        quantite: 1,
-        tva: 10,
-        prix_total_ht: null,
-        sub_trips_edit: [],
-        tri_rows: [],
-        tri_meta: { names:["A","B","C"], prices:{a:null,b:null,c:null} }
+        type:"service", ligne_numero:maxNum+1, description_service:"",
+        prix_unitaire_ht:null, quantite:1, tva:10, prix_total_ht:null,
+        sub_trips_edit:[], tri_rows:[], tri_meta:{ names:["A","B","C"], prices:{a:null,b:null,c:null} }
       });
       renderEditServices();
       scheduleAutosave("add-service");
@@ -843,7 +1175,6 @@
     if (action === "del-service") {
       const li = Number(btn.getAttribute("data-li"));
       const all = viewerDonneesBrutes.lines || [];
-      // remove the li-th service among services
       let count = -1;
       for (let i=0; i<all.length; i++) {
         if (all[i].type === "service") count++;
@@ -877,7 +1208,9 @@
     }
   });
 
-  // ---------- VIEWER ----------
+  // ---------------------------
+  // Viewer open
+  // ---------------------------
   async function openViewer(idx) {
     const item = state.files[idx];
     if (!item?.factureId) return;
@@ -907,37 +1240,26 @@
       <div><strong>Créé le :</strong> ${escapeHtml(data.created_at || "—")}</div>
     `;
 
+    const f = viewerDonneesBrutes.fields || {};
     hlBox.innerHTML = `
-      <span class="hlTag"># ${escapeHtml(viewerDonneesBrutes.fields.numero_facture || "")}</span>
-      <span class="hlTag">📅 ${escapeHtml(viewerDonneesBrutes.fields.date_facture || "")}</span>
-      <span class="hlTag">👤 ${escapeHtml(viewerDonneesBrutes.fields.client_nom || "")}</span>
+      <span class="hlTag"># ${escapeHtml(f.numero_facture || "")}</span>
+      <span class="hlTag">📅 ${escapeHtml(f.date_facture || "")}</span>
+      <span class="hlTag">👤 ${escapeHtml(f.client_nom || "")}</span>
+      <span class="hlTag">HT ${escapeHtml(f.total_ht!=null?String(f.total_ht):"")}</span>
+      <span class="hlTag">TTC ${escapeHtml(f.total_ttc!=null?String(f.total_ttc):"")}</span>
     `;
 
-    // render edit panels
     renderEditHeader();
     renderEditServices();
 
-    // show raw text
     setTab("edit");
     textModal.classList.add("open");
     textContent.textContent = (data.texte_ocr || "").trim();
-
-    // show reconstructed table (if exists)
-    const tablePages = data?.donnees_brutes?.table || [];
-    const servicesAll = [];
-    const deboursAll = [];
-    let hasReduc = false;
-    for (const p of tablePages) {
-      if (p?.services) servicesAll.push(...p.services);
-      if (p?.debours) deboursAll.push(...p.debours);
-      if (p?.debug?.hasReduc) hasReduc = true;
-    }
-    tableContent.innerHTML = (servicesAll.length || deboursAll.length)
-      ? `<div class="muted small">Tableau détecté (lecture seule). L’édition se fait dans l’onglet “Edition”.</div>`
-      : `<div class="muted">Aucun tableau détecté.</div>`;
   }
 
-  // ---------- SUPABASE INIT ----------
+  // ---------------------------
+  // Supabase init + keepalive
+  // ---------------------------
   async function waitForSupabaseClient() {
     for (let i = 0; i < 60; i++) {
       if (window.SupabaseClient) return window.SupabaseClient;
@@ -951,10 +1273,7 @@
       const { data: { user } } = await sb.auth.getUser();
       sessionOk = !!user;
       return sessionOk;
-    } catch {
-      sessionOk = false;
-      return false;
-    }
+    } catch { sessionOk = false; return false; }
   }
 
   async function ensureLoggedIn() {
@@ -975,7 +1294,118 @@
     }, 120000);
   }
 
-  // ---------- UPLOAD / EXTRACT ----------
+  // ---------------------------
+  // Extraction pipeline (V2.5 restored)
+  // ---------------------------
+  async function extractParseSaveAndInsert(item) {
+    const { data: signed, error: signErr } = await sb.storage.from("factures").createSignedUrl(item.uploadPath, 60*10);
+    if (signErr) throw signErr;
+
+    const res = await fetch(signed.signedUrl);
+    if (!res.ok) throw new Error("Téléchargement PDF impossible");
+    const arrayBuffer = await res.arrayBuffer();
+
+    const pdf = await window.pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+
+    let fullText = "";
+    const tablePages = [];
+
+    for (let p=1; p<=pdf.numPages; p++) {
+      const page = await pdf.getPage(p);
+      const content = await page.getTextContent();
+
+      fullText += `\n\n=== PAGE ${p} ===\n` + content.items.map(it => it.str).join(" ");
+      const table = extractPdfTableFromTextContent(content);
+      tablePages.push({ page: p, ...table });
+    }
+
+    fullText = fullText.trim();
+    if (fullText.length < 30) throw new Error("Texte extrait vide/trop court (PDF scan ?)");
+
+    const parsed = parseInvoiceText(fullText);
+    parsed.table = tablePages;
+    parsed.lines = parseLinesFromTable(tablePages, parsed);
+
+    parsed.table_debug = tablePages.map(tp => ({
+      page: tp.page,
+      headerFound: tp.debug?.headerFound,
+      hasReduc: tp.debug?.hasReduc,
+      servicesDetected: tp.debug?.servicesDetected,
+      tableLines: tp.debug?.tableLines
+    }));
+
+    const payload = { texte_ocr: fullText, statut:"extracted", donnees_brutes: parsed };
+
+    if (parsed?.fields?.numero_facture) payload.numero_facture = parsed.fields.numero_facture;
+    if (parsed?.fields?.date_facture) payload.date_facture = parsed.fields.date_facture;
+    if (parsed?.fields?.client_nom) payload.client_nom = parsed.fields.client_nom;
+    if (typeof parsed?.fields?.total_ht === "number") payload.total_ht = parsed.fields.total_ht;
+    if (typeof parsed?.fields?.total_tva === "number") payload.total_tva = parsed.fields.total_tva;
+    if (typeof parsed?.fields?.total_ttc === "number") payload.total_ttc = parsed.fields.total_ttc;
+
+    const { error: updErr } = await sb.from("factures").update(payload).eq("id", item.factureId);
+    if (updErr) throw updErr;
+
+    // Insert lines tables (same as before)
+    const services = parsed.lines.filter(l => l.type === "service");
+    const debours = parsed.lines.filter(l => l.type === "debours");
+
+    if (services.length > 0) {
+      const rowsLF = services.map(l => ({
+        facture_id: item.factureId,
+        ligne_numero: l.ligne_numero,
+        date_service: l.date_service,
+        heure_service: l.heure_service,
+        source_lieu: l.source_lieu,
+        destination_lieu: l.destination_lieu,
+        description_service: l.description_service,
+        trajet_brut: l.description_service,
+        prix_unitaire_ht: l.prix_unitaire_ht,
+        quantite: l.quantite,
+        tva: l.tva,
+        reduction_percent: l.reduction_percent,
+        prix_total_ht: l.prix_total_ht,
+        flags: { confidence:l.confidence, source_text:l.source_text, sub_trips: l.sub_trips || [] }
+      }));
+
+      const { error: lfErr } = await sb.from("lignes_factures").insert(rowsLF);
+      if (lfErr) throw lfErr;
+
+      const year = parsed?.fields?.date_facture ? parseInt(parsed.fields.date_facture.slice(0,4),10) : new Date().getFullYear();
+      const rowsSAS = services.map(l => ({
+        facture_id: item.factureId,
+        annee: year,
+        date_service: l.date_service,
+        heure_service: l.heure_service,
+        source_lieu: l.source_lieu,
+        destination_lieu: l.destination_lieu,
+        source_text: l.source_text,
+        prix_unitaire_ht: l.prix_unitaire_ht,
+        quantite: l.quantite,
+        tva: l.tva,
+        reduction_percent: l.reduction_percent,
+        total_ht: l.prix_total_ht,
+        flags: { confidence:l.confidence, sub_trips: l.sub_trips || [] },
+        status: "READY"
+      }));
+
+      const { error: sasErr } = await sb.from("import_factures_rows").insert(rowsSAS);
+      if (sasErr) throw sasErr;
+    }
+
+    if (debours.length > 0) {
+      const rowsDeb = debours.map(l => ({
+        facture_id: item.factureId,
+        ligne_numero: l.ligne_numero,
+        description_service: "DEBOURS: " + l.description_service,
+        trajet_brut: l.description_service,
+        prix_total_ht: l.prix_total_ht,
+        flags: { type:"debours", source_text:l.source_text }
+      }));
+      await sb.from("lignes_factures").insert(rowsDeb);
+    }
+  }
+
   async function uploadAndProcessOne(item) {
     item.status = "uploading"; item.error = null; render();
     try {
@@ -1003,12 +1433,8 @@
       item.status = "extracting";
       render();
 
-      // NOTE: extraction logic is unchanged here for V2.6
-      // because your extractor already works. We keep it stable.
-      // It will fill donnees_brutes as before.
+      await extractParseSaveAndInsert(item);
 
-      // For now mark extracted; your existing pipeline already updates.
-      // If you need the full OCR again inside this file, tell me and I merge it.
       item.status = "extracted";
 
       state.files = state.files.map(f => {
@@ -1019,8 +1445,8 @@
       });
 
       render();
-      setMsg("ok", "✅ Import OK. Ouvre avec 👁 Voir pour éditer.");
-      setTimeout(()=>setMsg("", ""), 1400);
+      setMsg("ok", "✅ Extraction OK. Clique 👁 Voir pour éditer.");
+      setTimeout(()=>setMsg("", ""), 1200);
 
     } catch (err) {
       item.status = "error";
@@ -1030,18 +1456,27 @@
     }
   }
 
-  // ---------- INIT APP ----------
+  // ---------------------------
+  // Init
+  // ---------------------------
   (async () => {
     try {
       sb = await waitForSupabaseClient();
 
+      // pdf worker
+      if (window.pdfjsLib?.GlobalWorkerOptions) {
+        window.pdfjsLib.GlobalWorkerOptions.workerSrc =
+          "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+      }
+
       const restored = restoreListStateFromLocalStorage();
       if (restored) setMsg("ok", "🔁 Liste restaurée.");
-      setTimeout(()=>setMsg("", ""), 1200);
+      setTimeout(()=>setMsg("", ""), 900);
 
       async function refreshAuthStatus() {
         const { data: { user } } = await sb.auth.getUser();
         sessionOk = !!user;
+
         if (user) {
           authStatus.textContent = "Connecté: " + (user.email || user.id);
           logoutBtn.disabled = false;
@@ -1069,7 +1504,7 @@
         passInput.value = "";
         await refreshAuthStatus();
         setMsg("ok", "✅ Connecté.");
-        setTimeout(()=>setMsg("", ""), 900);
+        setTimeout(()=>setMsg("", ""), 800);
       };
 
       logoutBtn.onclick = async () => { await sb.auth.signOut(); await refreshAuthStatus(); };
@@ -1081,11 +1516,13 @@
 
       startUploadBtn.onclick = async () => {
         if (!sessionOk) return setMsg("warn", "Connecte-toi d’abord.");
-        setMsg("warn", "Traitement…");
+        setMsg("warn", "Extraction en cours…");
+
         const toProcess = state.files.filter(f => f.kind === "local" && f.status === "ready");
         for (const it of toProcess) await uploadAndProcessOne(it);
+
         setMsg("ok", "✅ Terminé.");
-        setTimeout(()=>setMsg("", ""), 1500);
+        setTimeout(()=>setMsg("", ""), 1200);
       };
 
       render();
