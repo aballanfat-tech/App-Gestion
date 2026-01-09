@@ -39,6 +39,8 @@
     .hlBox { display:flex; gap:10px; flex-wrap:wrap; padding:10px 12px; border:1px solid #eee; border-radius:12px; background:#fafafa; margin:10px 0; }
     .hlTag { border:1px solid #ddd; border-radius:999px; padding:4px 8px; font-size:12px; background:#fff; }
 
+    mark.hl { background:#ffe58f; padding:0 2px; border-radius:4px; }
+
     .btnSmall {
       border:1px solid #ddd;
       background:#fff;
@@ -120,6 +122,20 @@
     .triPrices { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
     .triPrices input { width:110px; }
     .triSum { font-size:12px; color:#666; }
+
+    /* Table viewer */
+    .tablePdf {
+      width:100%;
+      border-collapse:collapse;
+      background:#fff;
+      border:1px solid #eee;
+      border-radius:12px;
+      overflow:hidden;
+      font-size:13px;
+    }
+    .tablePdf th, .tablePdf td { border-bottom:1px solid #eee; padding:8px 10px; vertical-align:top; }
+    .tablePdf th { background:#f7f7f7; font-size:12px; text-transform:uppercase; letter-spacing:.03em; color:#666; }
+    .tablePdf td.desc { white-space:normal; }
   </style>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
@@ -129,7 +145,7 @@
 <header>
   <div style="display:flex; align-items:center; gap:10px;">
     <button class="btn" id="backBtn">⬅️ Retour</button>
-    <strong>📤 Import Factures (V2.6.1 – Extraction restaurée + Edition)</strong>
+    <strong>📤 Import Factures (V2.6.2 – Extraction + Tableau + Surlignage + Edition)</strong>
   </div>
 
   <div class="authBox">
@@ -143,7 +159,7 @@
 
 <main>
   <div class="notice">
-    <div><strong>V2.6.1 :</strong> Extraction PDF.js + parsing + DB + édition + tri en lignes.</div>
+    <div><strong>V2.6.2 :</strong> Extraction restaurée + onglet Tableau + surlignage via matches (donnees_brutes.matches).</div>
     <div class="muted small">✅ autosave partout • ✅ restore liste • ✅ keepalive session</div>
   </div>
 
@@ -195,7 +211,7 @@
 <div id="textModal" style="position:fixed; inset:0; background:rgba(0,0,0,.5); align-items:center; justify-content:center; padding:18px;">
   <div style="width:min(1180px, 98vw); max-height:90vh; background:#fff; border-radius:14px; border:1px solid #e5e5e5; overflow:hidden; display:flex; flex-direction:column;">
     <div style="display:flex; align-items:center; justify-content:space-between; padding:12px 14px; border-bottom:1px solid #eee;">
-      <strong>🧾 Viewer (Edition)</strong>
+      <strong>🧾 Viewer (Edition + Tableau + Texte)</strong>
       <div style="display:flex; gap:8px;">
         <button class="btn" id="copyTextBtn">📋 Copier texte</button>
         <button class="btn" id="closeTextBtn">✖ Fermer</button>
@@ -207,6 +223,7 @@
 
       <div style="display:flex; gap:8px; margin-bottom:10px;">
         <button class="btn" id="tabEditBtn">🟧 Edition</button>
+        <button class="btn" id="tabTableBtn">🟩 Tableau</button>
         <button class="btn" id="tabTextBtn">🟦 Texte</button>
       </div>
 
@@ -221,9 +238,20 @@
         <div id="editServices"></div>
       </div>
 
+      <div id="tableWrap" style="display:none;">
+        <div class="muted small" style="margin-bottom:8px;">
+          Tableau reconstruit depuis le PDF (donnees_brutes.table). (Lecture seule)
+        </div>
+        <div id="tableContent" style="overflow:auto;"></div>
+      </div>
+
       <div id="textWrap" style="display:none;">
+        <div class="muted small" style="margin-bottom:8px;">
+          Les éléments reconnus (matches) sont surlignés automatiquement.
+        </div>
         <div id="textContent" style="white-space:pre-wrap; word-break:break-word; background:#fafafa; border:1px solid #eee; border-radius:12px; padding:12px; font-size:13px; line-height:1.35;"></div>
       </div>
+
     </div>
   </div>
 </div>
@@ -233,10 +261,10 @@
 
 <script>
   // ============================================================
-  // V2.6.1 - UI V2.6 + Extraction V2.5 restaurée
+  // V2.6.2 - Extraction + Table viewer + Highlight + Edition+Tri
   // ============================================================
 
-  const APP_VERSION = "v261";
+  const APP_VERSION = "v262";
   const LS_KEY = "import_factures_state_" + APP_VERSION;
 
   const MAX_FILES = 20;
@@ -263,10 +291,13 @@
   const copyTextBtn = document.getElementById("copyTextBtn");
   const textMeta = document.getElementById("textMeta");
   const tabEditBtn = document.getElementById("tabEditBtn");
+  const tabTableBtn = document.getElementById("tabTableBtn");
   const tabTextBtn = document.getElementById("tabTextBtn");
   const editWrap = document.getElementById("editWrap");
+  const tableWrap = document.getElementById("tableWrap");
   const textWrap = document.getElementById("textWrap");
   const textContent = document.getElementById("textContent");
+  const tableContent = document.getElementById("tableContent");
   const hlBox = document.getElementById("hlBox");
 
   const editHeader = document.getElementById("editHeader");
@@ -293,6 +324,10 @@
     }[c]));
   }
 
+  function escapeRegExp(str) {
+    return String(str).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
   function formatBytes(bytes) {
     const b = Number(bytes) || 0;
     if (b < 1024) return b + " B";
@@ -310,7 +345,7 @@
   }
 
   // ---------------------------
-  // Parsing helpers (V2.5)
+  // Parsing helpers (same as V2.6.1)
   // ---------------------------
   function normalizeNumber(str) {
     if (!str) return null;
@@ -318,29 +353,24 @@
     const val = parseFloat(n.replace(/[^0-9.]/g, ""));
     return Number.isFinite(val) ? val : null;
   }
-
   function parsePercent(str) {
     if (!str) return null;
     const m = String(str).match(/(\d{1,3})\s*%/);
     return m ? parseInt(m[1], 10) : null;
   }
-
   function parseFrenchDateAny(dateStr) {
     if (!dateStr) return null;
-
     const mNum = String(dateStr).match(/(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/);
     if (mNum) {
       let d = parseInt(mNum[1],10), mo = parseInt(mNum[2],10), y = parseInt(mNum[3],10);
       if (y < 100) y += 2000;
       return `${y.toString().padStart(4,"0")}-${mo.toString().padStart(2,"0")}-${d.toString().padStart(2,"0")}`;
     }
-
     const months = {
       "janvier":1, "février":2, "fevrier":2, "mars":3, "avril":4, "mai":5, "juin":6,
       "juillet":7, "août":8, "aout":8, "septembre":9, "octobre":10, "novembre":11,
       "décembre":12, "decembre":12
     };
-
     const mTxt = String(dateStr).toLowerCase().match(/(\d{1,2})\s+(janvier|février|fevrier|mars|avril|mai|juin|juillet|août|aout|septembre|octobre|novembre|décembre|decembre)\s+(\d{4})/);
     if (mTxt) {
       const d = parseInt(mTxt[1],10);
@@ -382,7 +412,6 @@
   function cleanClientName(raw) {
     if (!raw) return null;
     let s = String(raw).replace(/\s+/g, " ").trim();
-
     const stopMarkers = [" Conditions", " Adresse", " Pays", " Numéro", " Numero", " TVA", " Séjours", " Détail", " Detail"];
     for (const m of stopMarkers) {
       const idx = s.indexOf(m);
@@ -393,7 +422,6 @@
     s = s.replace(/\b\d+\s*(bis|ter)?\s+(rue|route|avenue|av\.?|allée|allee|chemin|cours|boulevard|bd|place|impasse|za|zone|montée|montee|mont|quai|passage)\b[\s\S]*$/i, "").trim();
     s = s.replace(/\b\d{5}\b[\s\S]*$/g, "").trim();
     s = s.replace(/\b(France|Belgique|Suisse|Luxembourg)\b[\s\S]*$/i, "").trim();
-
     const parts = s.split(" ");
     if (parts.length > 2) {
       const mid = Math.floor(parts.length / 2);
@@ -406,7 +434,7 @@
   }
 
   function parseInvoiceText(fullText) {
-    const out = { version:"parser_table_v261", parsed_at:new Date().toISOString(), fields:{}, matches:[] };
+    const out = { version:"parser_table_v262", parsed_at:new Date().toISOString(), fields:{}, matches:[] };
     const t = fullText || "";
 
     const mFact = t.match(/\bFacture\s+([A-Z]{2,6}-\d{3,4}-\d{2,})\b/i) || t.match(/\bFACT-\d{4}-\d{2,}\b/);
@@ -458,7 +486,7 @@
   }
 
   // ---------------------------
-  // Table detector (V2.5)
+  // Table detector (same as V2.6.1)
   // ---------------------------
   function groupItemsIntoLines(items, baseTolerance = 3.2) {
     const sorted = [...items].sort((a,b) => b.y - a.y);
@@ -765,6 +793,83 @@
   }
 
   // ---------------------------
+  // Highlight + table render
+  // ---------------------------
+  function getHighlightValues(donnees) {
+    const matches = (donnees && donnees.matches) ? donnees.matches : [];
+    const set = new Set();
+
+    for (const m of matches) {
+      const v = (m?.value || "").toString().trim();
+      if (v.length >= 3 && v.length <= 160) set.add(v);
+    }
+
+    // Also add top-level fields if present
+    const f = (donnees && donnees.fields) ? donnees.fields : {};
+    ["numero_facture","date_facture","client_nom"].forEach(k => {
+      const v = (f[k] || "").toString().trim();
+      if (v.length >= 3 && v.length <= 160) set.add(v);
+    });
+
+    // sort longest first (avoid partial replacement eating bigger tokens)
+    return Array.from(set).sort((a,b) => b.length - a.length);
+  }
+
+  function renderHighlightedText(rawText, highlightValues) {
+    // escape first
+    let html = escapeHtml(rawText || "");
+    for (const val of highlightValues) {
+      const re = new RegExp(escapeRegExp(escapeHtml(val)), "g");
+      html = html.replace(re, `<mark class="hl">${escapeHtml(val)}</mark>`);
+    }
+    return html;
+  }
+
+  function renderTableFromDonnees(donnees) {
+    const pages = (donnees && donnees.table) ? donnees.table : [];
+    const services = [];
+    let hasReduc = false;
+
+    for (const p of pages) {
+      if (p?.cols?.hasReduc) hasReduc = true;
+      if (p?.services?.length) services.push(...p.services);
+    }
+
+    if (!services.length) return `<div class="muted">Aucun tableau détecté.</div>`;
+
+    const thReduc = hasReduc ? `<th>Réduc</th>` : ``;
+
+    const rows = services.map(r => `
+      <tr>
+        <td>${escapeHtml(r.type || "Service")}</td>
+        <td class="desc">${escapeHtml(r.desc || "")}</td>
+        <td>${escapeHtml(r.pu || "")}</td>
+        <td>${escapeHtml(r.qty || "")}</td>
+        <td>${escapeHtml(r.tva || "")}</td>
+        ${hasReduc ? `<td>${escapeHtml(r.reduc || "")}</td>` : ``}
+        <td>${escapeHtml(r.total || "")}</td>
+      </tr>
+    `).join("");
+
+    return `
+      <table class="tablePdf">
+        <thead>
+          <tr>
+            <th>Type</th>
+            <th>Description</th>
+            <th>PU HT</th>
+            <th>Qté</th>
+            <th>TVA</th>
+            ${thReduc}
+            <th>Total HT</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    `;
+  }
+
+  // ---------------------------
   // localStorage restore/save list
   // ---------------------------
   function saveListStateToLocalStorage() {
@@ -892,7 +997,8 @@
   // ---------------------------
   function closeModal() {
     textModal.classList.remove("open");
-    textContent.textContent = "";
+    textContent.innerHTML = "";
+    tableContent.innerHTML = "";
     hlBox.innerHTML = "";
     editHeader.innerHTML = "";
     editServices.innerHTML = "";
@@ -906,13 +1012,19 @@
 
   function setTab(which) {
     editWrap.style.display = (which === "edit") ? "block" : "none";
+    tableWrap.style.display = (which === "table") ? "block" : "none";
     textWrap.style.display = (which === "text") ? "block" : "none";
   }
   tabEditBtn.onclick = () => setTab("edit");
+  tabTableBtn.onclick = () => setTab("table");
   tabTextBtn.onclick = () => setTab("text");
 
   copyTextBtn.onclick = async () => {
-    await navigator.clipboard.writeText(textContent.textContent || "");
+    // copy raw text (without markup)
+    const tmp = document.createElement("div");
+    tmp.innerHTML = textContent.innerHTML;
+    const raw = tmp.textContent || tmp.innerText || "";
+    await navigator.clipboard.writeText(raw);
     copyTextBtn.textContent = "✅ Copié";
     setTimeout(() => copyTextBtn.textContent = "📋 Copier texte", 900);
   };
@@ -952,7 +1064,7 @@
   }
 
   // ---------------------------
-  // Editor render
+  // Editor render (same as V2.6.1)
   // ---------------------------
   function renderEditHeader() {
     const f = viewerDonneesBrutes.fields || (viewerDonneesBrutes.fields = {});
@@ -1086,7 +1198,6 @@
 
       if (k === "desc") {
         line.description_service = t.value;
-        // Re-extract sub_trips_edit but keep user edits if any
         if (!line.sub_trips_edit || line.sub_trips_edit.__auto) {
           const trips = extractSubTrips(t.value);
           trips.__auto = true;
@@ -1252,9 +1363,16 @@
     renderEditHeader();
     renderEditServices();
 
+    // TABLE
+    tableContent.innerHTML = renderTableFromDonnees(viewerDonneesBrutes);
+
+    // TEXT + HIGHLIGHTS
+    const rawText = (data.texte_ocr || "").trim();
+    const values = getHighlightValues(viewerDonneesBrutes);
+    textContent.innerHTML = renderHighlightedText(rawText, values);
+
     setTab("edit");
     textModal.classList.add("open");
-    textContent.textContent = (data.texte_ocr || "").trim();
   }
 
   // ---------------------------
@@ -1295,7 +1413,7 @@
   }
 
   // ---------------------------
-  // Extraction pipeline (V2.5 restored)
+  // Extraction pipeline (same as V2.6.1)
   // ---------------------------
   async function extractParseSaveAndInsert(item) {
     const { data: signed, error: signErr } = await sb.storage.from("factures").createSignedUrl(item.uploadPath, 60*10);
@@ -1325,7 +1443,6 @@
     const parsed = parseInvoiceText(fullText);
     parsed.table = tablePages;
     parsed.lines = parseLinesFromTable(tablePages, parsed);
-
     parsed.table_debug = tablePages.map(tp => ({
       page: tp.page,
       headerFound: tp.debug?.headerFound,
@@ -1445,7 +1562,7 @@
       });
 
       render();
-      setMsg("ok", "✅ Extraction OK. Clique 👁 Voir pour éditer.");
+      setMsg("ok", "✅ Extraction OK. Clique 👁 Voir pour éditer / voir tableau / surlignage.");
       setTimeout(()=>setMsg("", ""), 1200);
 
     } catch (err) {
@@ -1463,15 +1580,12 @@
     try {
       sb = await waitForSupabaseClient();
 
-      // pdf worker
       if (window.pdfjsLib?.GlobalWorkerOptions) {
         window.pdfjsLib.GlobalWorkerOptions.workerSrc =
           "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
       }
 
-      const restored = restoreListStateFromLocalStorage();
-      if (restored) setMsg("ok", "🔁 Liste restaurée.");
-      setTimeout(()=>setMsg("", ""), 900);
+      restoreListStateFromLocalStorage();
 
       async function refreshAuthStatus() {
         const { data: { user } } = await sb.auth.getUser();
@@ -1508,7 +1622,6 @@
       };
 
       logoutBtn.onclick = async () => { await sb.auth.signOut(); await refreshAuthStatus(); };
-
       sb.auth.onAuthStateChange(async () => { await refreshAuthStatus(); });
 
       await refreshAuthStatus();
