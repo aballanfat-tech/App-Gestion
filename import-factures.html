@@ -5,897 +5,631 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Import Factures</title>
 
+  <!-- PDF.js -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+
   <style>
-    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 0; background:#fafafa; }
-    header { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:14px 18px; background:#fff; border-bottom:1px solid #e5e5e5; position:sticky; top:0; z-index:100; flex-wrap:wrap; }
-    .btn { cursor:pointer; border:1px solid #ddd; background:#fff; padding:10px 12px; border-radius:10px; }
-    .btn:disabled { opacity:.5; cursor:not-allowed; }
-    main { max-width: 980px; margin: 18px auto; padding: 0 14px; }
-    .card { background:#fff; border:1px solid #e5e5e5; border-radius:14px; padding:14px; margin-bottom:14px; }
-    .drop { border:2px dashed #bbb; border-radius:14px; padding:22px; text-align:center; background:#fcfcfc; }
-    .drop.drag { border-color:#333; background:#fff; }
-    table { width:100%; border-collapse: collapse; }
-    th, td { border-bottom:1px solid #eee; padding:10px 8px; text-align:left; font-size:14px; vertical-align:top; }
-    th { font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:#666; }
-    .pill { display:inline-block; padding:4px 8px; border-radius:999px; border:1px solid #ddd; font-size:12px; }
-    .ok { border-color:#9ad39a; }
-    .err { border-color:#ffb3b3; }
-    .muted { color:#666; font-size:13px; }
-    .row-actions { display:flex; gap:8px; flex-wrap:wrap; }
-    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size:12px; }
-    .notice { background:#fff7d6; border:1px solid #f1d88a; padding:10px 12px; border-radius:12px; margin-bottom:14px; }
-    .small { font-size:12px; }
-    input[type="file"] { max-width: 100%; }
-    .field { border:1px solid #ddd; border-radius:10px; padding:10px 12px; background:#fff; }
-    .authBox { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-    .msg { padding:10px 12px; border-radius:12px; border:1px solid #e5e5e5; background:#fff; }
-    .msg.ok { border-color:#9ad39a; background:#f2fff2; }
-    .msg.err { border-color:#ffb3b3; background:#fff2f2; }
-    .msg.warn { border-color:#f1d88a; background:#fff7d6; }
+    :root{
+      --bg:#fafafa;
+      --card:#ffffff;
+      --muted:#6b7280;
+      --border:#e5e7eb;
+      --border2:#d1d5db;
+      --ok:#10b981;
+      --warn:#f59e0b;
+      --err:#ef4444;
+      --hl:#ffe58f;
+      --btn:#ffffff;
+      --btn2:#111827;
+    }
+    *{box-sizing:border-box;}
+    body{
+      margin:0;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      background:var(--bg);
+      color:#111827;
+    }
+    header{
+      display:flex; align-items:center; justify-content:space-between;
+      gap:12px; padding:14px 18px;
+      background:#fff; border-bottom:1px solid var(--border);
+      position:sticky; top:0; z-index:100;
+      flex-wrap:wrap;
+    }
+    main{ max-width: 1100px; margin: 18px auto; padding: 0 14px; }
 
-    #textModal { display:none; pointer-events:none; z-index: 9999; }
-    #textModal.open { display:flex !important; pointer-events:auto; }
-
-    .hlBox { display:flex; gap:10px; flex-wrap:wrap; padding:10px 12px; border:1px solid #eee; border-radius:12px; background:#fafafa; margin:10px 0; }
-    .hlTag { border:1px solid #ddd; border-radius:999px; padding:4px 8px; font-size:12px; background:#fff; }
-
-    mark.hl { background:#ffe58f; padding:0 2px; border-radius:4px; }
-
-    .btnSmall {
-      border:1px solid #ddd;
-      background:#fff;
-      padding:6px 8px;
-      border-radius:10px;
+    .row{display:flex; gap:10px; flex-wrap:wrap;}
+    .btn{
       cursor:pointer;
-      font-size:12px;
+      border:1px solid var(--border2);
+      background:var(--btn);
+      padding:10px 12px;
+      border-radius:12px;
+      font-weight:600;
+      user-select:none;
+    }
+    .btn:hover{ border-color:#9ca3af; }
+    .btn:disabled{ opacity:.55; cursor:not-allowed; }
+    .btn.primary{ background:#111827; color:#fff; border-color:#111827; }
+    .btn.ghost{ background:#fff; color:#111827; }
+    .btn.small{ padding:7px 10px; font-size:12px; border-radius:10px; font-weight:600; }
+
+    .field{
+      border:1px solid var(--border2);
+      background:#fff;
+      padding:10px 12px;
+      border-radius:12px;
+      outline:none;
+      min-width: 180px;
+    }
+    .mono{ font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size:12px; }
+    .muted{ color:var(--muted); font-size:13px; }
+    .small{ font-size:12px; }
+    .card{
+      background:var(--card);
+      border:1px solid var(--border);
+      border-radius:16px;
+      padding:14px;
+      margin-bottom:14px;
+    }
+    .notice{
+      background:#fff7d6;
+      border:1px solid #f1d88a;
+      border-radius:14px;
+      padding:10px 12px;
+      margin-bottom:14px;
+    }
+    .msg{
+      padding:10px 12px;
+      border-radius:14px;
+      border:1px solid var(--border);
+      background:#fff;
+      margin-bottom:12px;
+      font-weight:600;
+    }
+    .msg.ok{ border-color:#9ad39a; background:#f2fff2; }
+    .msg.warn{ border-color:#f1d88a; background:#fff7d6; }
+    .msg.err{ border-color:#ffb3b3; background:#fff2f2; }
+
+    /* Dropzone */
+    .drop{
+      border:2px dashed #bdbdbd;
+      border-radius:16px;
+      padding:22px;
+      text-align:center;
+      background:#fcfcfc;
+      transition: .15s;
+    }
+    .drop.drag{
+      border-color:#111827;
+      background:#fff;
+      transform: scale(1.01);
     }
 
-    /* EDIT ZONE */
-    .editGrid {
+    table{ width:100%; border-collapse: collapse; }
+    th, td{ border-bottom:1px solid #eee; padding:10px 8px; text-align:left; vertical-align:top; }
+    th{ font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:#6b7280; background:#fafafa; }
+    .pill{
+      display:inline-block;
+      padding:4px 9px;
+      border-radius:999px;
+      border:1px solid var(--border2);
+      font-size:12px;
+      font-weight:700;
+    }
+    .pill.ok{ border-color:#9ad39a; color:#047857; background:#ecfdf5; }
+    .pill.err{ border-color:#ffb3b3; color:#b91c1c; background:#fff1f2; }
+    .pill.wait{ border-color:#f1d88a; color:#92400e; background:#fff7d6; }
+
+    /* Modal */
+    #modal{
+      position:fixed; inset:0;
+      background:rgba(0,0,0,.55);
+      display:none;
+      align-items:center; justify-content:center;
+      padding:18px;
+      z-index:9999;
+    }
+    #modal.open{ display:flex; }
+    .modalBox{
+      width:min(1200px, 98vw);
+      max-height:92vh;
+      background:#fff;
+      border-radius:16px;
+      border:1px solid var(--border);
+      overflow:hidden;
+      display:flex;
+      flex-direction:column;
+    }
+    .modalHead{
+      display:flex; align-items:center; justify-content:space-between;
+      padding:12px 14px;
+      border-bottom:1px solid #eee;
+      gap:8px;
+      flex-wrap:wrap;
+    }
+    .modalBody{
+      padding:12px 14px;
+      overflow:auto;
+    }
+    .tabs{
+      display:flex; gap:8px;
+      flex-wrap:wrap;
+      margin-bottom:10px;
+    }
+    .tab{
+      cursor:pointer;
+      border:1px solid var(--border2);
+      background:#fff;
+      padding:8px 10px;
+      border-radius:12px;
+      font-weight:800;
+      font-size:12px;
+    }
+    .tab.active{ background:#111827; color:#fff; border-color:#111827; }
+
+    mark.hl{ background:var(--hl); padding:0 2px; border-radius:4px; }
+
+    /* Editor */
+    .grid2{
       display:grid;
       grid-template-columns: 1fr 1fr;
       gap:10px;
-      padding:12px;
-      border:1px solid #eee;
-      border-radius:12px;
       background:#fafafa;
-      margin-bottom:12px;
-    }
-    .editGrid .label { font-size:12px; color:#666; margin-bottom:4px; }
-    .editGrid input {
-      width:100%;
-      border:1px solid #ddd;
-      border-radius:10px;
-      padding:8px 10px;
-      font-size:13px;
-      background:#fff;
-    }
-    .editFull { grid-column: 1 / -1; }
-
-    .editTable {
-      width:100%;
-      border-collapse:collapse;
-      background:#fff;
       border:1px solid #eee;
+      padding:12px;
+      border-radius:14px;
+      margin:8px 0 12px;
+    }
+    .grid2 .full{ grid-column: 1 / -1; }
+    .label{ font-size:12px; color:#6b7280; margin-bottom:5px; font-weight:800; }
+    .grid2 input{
+      width:100%;
+      border:1px solid var(--border2);
+      padding:9px 10px;
       border-radius:12px;
+      background:#fff;
+      font-size:13px;
+      outline:none;
+    }
+
+    .editTable{
+      width:100%;
+      border-collapse: collapse;
+      border:1px solid #eee;
+      border-radius:14px;
       overflow:hidden;
-      font-size:13px;
-    }
-    .editTable th, .editTable td { border-bottom:1px solid #eee; padding:8px 10px; vertical-align:top; }
-    .editTable th { background:#f7f7f7; font-size:12px; text-transform:uppercase; letter-spacing:.03em; color:#666; }
-    .editTable input, .editTable select {
-      width:100%;
-      border:1px solid #ddd;
-      border-radius:10px;
-      padding:7px 8px;
-      font-size:12px;
       background:#fff;
     }
-    .editRowActions { display:flex; gap:6px; }
-    .sectionTitle { font-weight:800; margin: 12px 0 8px; }
-
-    /* TRI rows */
-    .triBox {
-      margin-top:10px;
-      padding:12px;
-      border:1px solid #eee;
+    .editTable th{ background:#f7f7f7; }
+    .editTable td{ border-bottom:1px solid #eee; }
+    .editTable input, .editTable select{
+      width:100%;
+      border:1px solid var(--border2);
+      padding:8px 9px;
       border-radius:12px;
-      background:#fafafa;
+      background:#fff;
+      font-size:12px;
+      outline:none;
     }
-    .triHead {
-      display:flex;
+    .actions{ display:flex; gap:8px; flex-wrap:wrap; }
+
+    /* Tri destinations */
+    .triBox{
+      background:#fafafa;
+      border:1px solid #eee;
+      padding:12px;
+      border-radius:14px;
+      margin-top:12px;
+    }
+    .triHead{ display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; }
+    .triNames{ display:flex; gap:8px; flex-wrap:wrap; }
+    .triNames input{ width:170px; }
+    .triRow{
+      display:grid;
+      grid-template-columns: 1fr 120px 120px 120px 110px;
       gap:8px;
-      flex-wrap:wrap;
+      margin-top:10px;
       align-items:center;
-      justify-content:space-between;
-      margin-bottom:10px;
     }
-    .triNames { display:flex; gap:8px; flex-wrap:wrap; }
-    .triNames input {
-      width:180px;
-      border:1px solid #ddd;
-      border-radius:10px;
-      padding:7px 8px;
-      font-size:12px;
-      background:#fff;
-    }
-    .triPrices { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
-    .triPrices input { width:110px; }
-    .triSum { font-size:12px; color:#666; }
-
-    /* Table viewer */
-    .tablePdf {
-      width:100%;
-      border-collapse:collapse;
-      background:#fff;
-      border:1px solid #eee;
+    .triRow input{
+      border:1px solid var(--border2);
+      padding:8px 9px;
       border-radius:12px;
-      overflow:hidden;
-      font-size:13px;
+      background:#fff;
+      font-size:12px;
+      outline:none;
     }
-    .tablePdf th, .tablePdf td { border-bottom:1px solid #eee; padding:8px 10px; vertical-align:top; }
-    .tablePdf th { background:#f7f7f7; font-size:12px; text-transform:uppercase; letter-spacing:.03em; color:#666; }
-    .tablePdf td.desc { white-space:normal; }
+    .triRow .btn.small{ justify-self:start; }
+    .triMeta{ display:flex; gap:10px; flex-wrap:wrap; margin-top:10px; }
+    .triMeta .pill{ background:#fff; }
   </style>
-
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 </head>
 
 <body>
 <header>
-  <div style="display:flex; align-items:center; gap:10px;">
+  <div class="row" style="align-items:center;">
     <button class="btn" id="backBtn">⬅️ Retour</button>
-    <strong>📤 Import Factures (V2.6.2 – Extraction + Tableau + Surlignage + Edition)</strong>
+    <div>
+      <div style="font-weight:900;">📤 Import Factures — V2.6.5</div>
+      <div class="muted small">Table detector V2.2 + fallback OCR + édition + autosave + tri modifiable</div>
+    </div>
   </div>
 
-  <div class="authBox">
+  <div class="row" style="align-items:center;">
     <span class="muted" id="authStatus">Connexion…</span>
-    <input class="field" id="emailInput" type="email" placeholder="Email" style="min-width:220px;">
-    <input class="field" id="passInput" type="password" placeholder="Mot de passe" style="min-width:160px;">
-    <button class="btn" id="loginBtn">Se connecter</button>
+    <input class="field" id="email" type="email" placeholder="Email">
+    <input class="field" id="pass" type="password" placeholder="Mot de passe">
+    <button class="btn primary" id="loginBtn">Se connecter</button>
     <button class="btn" id="logoutBtn" disabled>Se déconnecter</button>
   </div>
 </header>
 
 <main>
+  <div id="msg" class="msg warn" style="display:none;"></div>
+
   <div class="notice">
-    <div><strong>V2.6.2 :</strong> Extraction restaurée + onglet Tableau + surlignage via matches (donnees_brutes.matches).</div>
-    <div class="muted small">✅ autosave partout • ✅ restore liste • ✅ keepalive session</div>
+    ✅ Si le PDF ne permet pas de détecter l’en-tête du tableau (X/Y) → <strong>fallback OCR</strong> (reconstruction depuis le texte).<br>
+    ✅ Tout est <strong>éditable</strong> avant intégration : client, dates, totaux, lignes, tri destinations (ajout/suppression).
   </div>
 
-  <div id="globalMsg" class="msg warn" style="display:none; margin-bottom:14px;"></div>
-
   <div class="card">
-    <div class="drop" id="dropZone">
-      <div style="font-size:18px; margin-bottom:6px;">Glisse-dépose tes PDFs ici</div>
+    <div class="drop" id="drop">
+      <div style="font-size:18px; font-weight:900;">Glisse-dépose tes PDFs ici</div>
       <div class="muted">PDF uniquement • max 10 MB/fichier • max 20 fichiers</div>
       <div style="margin-top:12px;">
-        <input type="file" id="fileInput" accept="application/pdf" multiple />
+        <input type="file" id="fileInput" accept="application/pdf" multiple>
       </div>
     </div>
-    <div style="margin-top:12px; display:flex; gap:10px; flex-wrap:wrap;">
-      <button class="btn" id="startUploadBtn" disabled>🚀 Uploader & Extraire</button>
+
+    <div class="row" style="margin-top:12px;">
+      <button class="btn primary" id="startBtn" disabled>🚀 Uploader & Extraire</button>
       <button class="btn" id="clearBtn" disabled>🧹 Vider la liste</button>
+      <button class="btn" id="reloadBtn">🔄 Recharger la liste</button>
     </div>
+
     <div class="muted small" style="margin-top:10px;">
-      💡 La liste des factures déjà importées est restaurée automatiquement (localStorage).
+      💾 La liste est sauvegardée (localStorage). Les factures déjà importées restent visibles.
     </div>
   </div>
 
   <div class="card">
-    <div style="display:flex; align-items:center; justify-content:space-between;">
-      <strong>📄 Fichiers / Factures</strong>
-      <span class="muted" id="selectedCount">0</span>
+    <div class="row" style="align-items:center; justify-content:space-between;">
+      <div style="font-weight:900;">📄 Factures</div>
+      <div class="muted" id="count">0</div>
     </div>
 
     <div style="overflow:auto; margin-top:10px;">
       <table>
         <thead>
-        <tr>
-          <th>Fichier</th>
-          <th>Taille</th>
-          <th>Statut</th>
-          <th>Facture ID</th>
-          <th>Actions</th>
-        </tr>
+          <tr>
+            <th>Fichier</th>
+            <th>Taille</th>
+            <th>Statut</th>
+            <th>ID</th>
+            <th>Actions</th>
+          </tr>
         </thead>
-        <tbody id="filesTbody">
-        <tr><td colspan="5" class="muted">Aucun fichier</td></tr>
+        <tbody id="tbody">
+          <tr><td colspan="5" class="muted">Aucun fichier</td></tr>
         </tbody>
       </table>
     </div>
   </div>
 </main>
 
-<!-- Viewer / Editor modal -->
-<div id="textModal" style="position:fixed; inset:0; background:rgba(0,0,0,.5); align-items:center; justify-content:center; padding:18px;">
-  <div style="width:min(1180px, 98vw); max-height:90vh; background:#fff; border-radius:14px; border:1px solid #e5e5e5; overflow:hidden; display:flex; flex-direction:column;">
-    <div style="display:flex; align-items:center; justify-content:space-between; padding:12px 14px; border-bottom:1px solid #eee;">
-      <strong>🧾 Viewer (Edition + Tableau + Texte)</strong>
-      <div style="display:flex; gap:8px;">
-        <button class="btn" id="copyTextBtn">📋 Copier texte</button>
-        <button class="btn" id="closeTextBtn">✖ Fermer</button>
+<!-- MODAL -->
+<div id="modal">
+  <div class="modalBox">
+    <div class="modalHead">
+      <div>
+        <div style="font-weight:900;">🧾 Viewer facture</div>
+        <div class="muted small" id="meta"></div>
+      </div>
+      <div class="row">
+        <button class="btn" id="reparseBtn">🔁 Re-Parser</button>
+        <button class="btn" id="saveBtn">💾 Sauvegarder</button>
+        <button class="btn" id="closeBtn">✖ Fermer</button>
       </div>
     </div>
-    <div style="padding:12px 14px; overflow:auto;">
-      <div class="muted" id="textMeta" style="margin-bottom:10px;"></div>
-      <div id="hlBox" class="hlBox"></div>
 
-      <div style="display:flex; gap:8px; margin-bottom:10px;">
-        <button class="btn" id="tabEditBtn">🟧 Edition</button>
-        <button class="btn" id="tabTableBtn">🟩 Tableau</button>
-        <button class="btn" id="tabTextBtn">🟦 Texte</button>
+    <div class="modalBody">
+      <div class="row" style="align-items:center; justify-content:space-between;">
+        <div class="row" id="tags" style="gap:8px;"></div>
+        <div class="muted small" id="autosaveInfo"></div>
       </div>
 
-      <div id="editWrap">
-        <div class="sectionTitle">🧩 En-tête facture (éditable)</div>
-        <div id="editHeader" class="editGrid"></div>
+      <div class="tabs">
+        <button class="tab active" data-tab="edit">🟧 Edition</button>
+        <button class="tab" data-tab="table">🟩 Tableau</button>
+        <button class="tab" data-tab="text">🟦 Texte</button>
+        <button class="tab" data-tab="debug">🧪 Debug</button>
+      </div>
 
-        <div class="sectionTitle">🚌 Lignes de service (éditables)</div>
-        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px;">
-          <button class="btnSmall" data-action="add-service">➕ Ajouter une ligne service</button>
+      <div id="tab-edit">
+        <div style="font-weight:900; margin:8px 0;">🧩 En-tête facture (éditable)</div>
+        <div class="grid2" id="editHeader"></div>
+
+        <div style="font-weight:900; margin:12px 0 6px;">🚌 Lignes (services) (éditables)</div>
+        <div class="actions" style="margin-bottom:8px;">
+          <button class="btn small" id="addLineBtn">➕ Ajouter une ligne</button>
         </div>
-        <div id="editServices"></div>
-      </div>
+        <div id="editLines"></div>
 
-      <div id="tableWrap" style="display:none;">
-        <div class="muted small" style="margin-bottom:8px;">
-          Tableau reconstruit depuis le PDF (donnees_brutes.table). (Lecture seule)
+        <div style="font-weight:900; margin:14px 0 6px;">🧭 Tri destinations (A / B / C) — modifiable</div>
+        <div class="triBox">
+          <div class="triHead">
+            <div class="triNames">
+              <div>
+                <div class="label">Nom A</div>
+                <input id="triNameA" placeholder="Ex: Excursions">
+              </div>
+              <div>
+                <div class="label">Nom B</div>
+                <input id="triNameB" placeholder="Ex: Navettes">
+              </div>
+              <div>
+                <div class="label">Nom C</div>
+                <input id="triNameC" placeholder="Ex: Débours">
+              </div>
+            </div>
+            <div class="row">
+              <button class="btn small" id="addTriRowBtn">➕ Ajouter une ligne</button>
+              <button class="btn small" id="applyTriBtn">🧠 Auto-suggérer</button>
+            </div>
+          </div>
+
+          <div class="triRow" style="font-weight:900; color:#6b7280;">
+            <div>Libellé / Description</div>
+            <div>Catégorie</div>
+            <div>Prix HT</div>
+            <div>Qté</div>
+            <div>Action</div>
+          </div>
+          <div id="triRows"></div>
+
+          <div class="triMeta">
+            <span class="pill" id="sumA">A: 0€</span>
+            <span class="pill" id="sumB">B: 0€</span>
+            <span class="pill" id="sumC">C: 0€</span>
+            <span class="pill" id="sumAll">Total: 0€</span>
+          </div>
+
+          <div class="muted small" style="margin-top:10px;">
+            ✅ Tu peux modifier, ajouter, supprimer des lignes avant intégration vers la grille.
+          </div>
         </div>
-        <div id="tableContent" style="overflow:auto;"></div>
       </div>
 
-      <div id="textWrap" style="display:none;">
-        <div class="muted small" style="margin-bottom:8px;">
-          Les éléments reconnus (matches) sont surlignés automatiquement.
+      <div id="tab-table" style="display:none;">
+        <div class="muted small" style="margin:8px 0;">
+          Tableau reconstruit depuis X/Y PDF. Si vide → fallback OCR (texte).
         </div>
-        <div id="textContent" style="white-space:pre-wrap; word-break:break-word; background:#fafafa; border:1px solid #eee; border-radius:12px; padding:12px; font-size:13px; line-height:1.35;"></div>
+        <div id="tableHtml"></div>
       </div>
 
+      <div id="tab-text" style="display:none;">
+        <div class="muted small" style="margin:8px 0;">
+          Les éléments reconnus sont surlignés.
+        </div>
+        <div id="textHtml" style="white-space:pre-wrap; word-break:break-word; background:#fafafa; border:1px solid #eee; border-radius:14px; padding:12px; font-size:13px; line-height:1.35;"></div>
+      </div>
+
+      <div id="tab-debug" style="display:none;">
+        <div class="muted small" style="margin:8px 0;">donnees_brutes (JSON)</div>
+        <pre id="debugJson" class="mono" style="background:#0b1020; color:#e5e7eb; border-radius:14px; padding:12px; overflow:auto; max-height:55vh;"></pre>
+      </div>
     </div>
   </div>
 </div>
 
+<!-- Supabase -->
 <script src="./supabase-core.js"></script>
 <script src="./supabase-services.js"></script>
 
 <script>
-  // ============================================================
-  // V2.6.2 - Extraction + Table viewer + Highlight + Edition+Tri
-  // ============================================================
-
-  const APP_VERSION = "v262";
+/* ============================
+   IMPORT FACTURES — V2.6.5
+   Table detector v2.2 + fallback OCR + editor + autosave + tri editable
+============================ */
+(() => {
+  const APP_VERSION = "v265";
   const LS_KEY = "import_factures_state_" + APP_VERSION;
-
   const MAX_FILES = 20;
   const MAX_SIZE = 10 * 1024 * 1024;
-  let sb = null;
 
-  const state = { files: [] };
+  // DOM
+  const backBtn = document.getElementById("backBtn");
+  const msgBox = document.getElementById("msg");
 
-  const dropZone = document.getElementById("dropZone");
+  const drop = document.getElementById("drop");
   const fileInput = document.getElementById("fileInput");
-  const startUploadBtn = document.getElementById("startUploadBtn");
+  const startBtn = document.getElementById("startBtn");
   const clearBtn = document.getElementById("clearBtn");
-  const filesTbody = document.getElementById("filesTbody");
-  const selectedCount = document.getElementById("selectedCount");
+  const reloadBtn = document.getElementById("reloadBtn");
+  const tbody = document.getElementById("tbody");
+  const count = document.getElementById("count");
 
   const authStatus = document.getElementById("authStatus");
+  const email = document.getElementById("email");
+  const pass = document.getElementById("pass");
   const loginBtn = document.getElementById("loginBtn");
   const logoutBtn = document.getElementById("logoutBtn");
-  const emailInput = document.getElementById("emailInput");
-  const passInput = document.getElementById("passInput");
 
-  const textModal = document.getElementById("textModal");
-  const closeTextBtn = document.getElementById("closeTextBtn");
-  const copyTextBtn = document.getElementById("copyTextBtn");
-  const textMeta = document.getElementById("textMeta");
-  const tabEditBtn = document.getElementById("tabEditBtn");
-  const tabTableBtn = document.getElementById("tabTableBtn");
-  const tabTextBtn = document.getElementById("tabTextBtn");
-  const editWrap = document.getElementById("editWrap");
-  const tableWrap = document.getElementById("tableWrap");
-  const textWrap = document.getElementById("textWrap");
-  const textContent = document.getElementById("textContent");
-  const tableContent = document.getElementById("tableContent");
-  const hlBox = document.getElementById("hlBox");
+  const modal = document.getElementById("modal");
+  const closeBtn = document.getElementById("closeBtn");
+  const reparseBtn = document.getElementById("reparseBtn");
+  const saveBtn = document.getElementById("saveBtn");
+
+  const meta = document.getElementById("meta");
+  const tags = document.getElementById("tags");
+  const autosaveInfo = document.getElementById("autosaveInfo");
+
+  const tabButtons = Array.from(document.querySelectorAll(".tab"));
+  const tabEdit = document.getElementById("tab-edit");
+  const tabTable = document.getElementById("tab-table");
+  const tabText = document.getElementById("tab-text");
+  const tabDebug = document.getElementById("tab-debug");
 
   const editHeader = document.getElementById("editHeader");
-  const editServices = document.getElementById("editServices");
+  const editLines = document.getElementById("editLines");
 
-  document.getElementById("backBtn").onclick = () => window.location.href = "index.html";
+  const addLineBtn = document.getElementById("addLineBtn");
 
-  let viewerFactureId = null;
-  let viewerDonneesBrutes = null;
-  let autosaveTimer = null;
-  let keepAliveTimer = null;
+  const triNameA = document.getElementById("triNameA");
+  const triNameB = document.getElementById("triNameB");
+  const triNameC = document.getElementById("triNameC");
+  const triRows = document.getElementById("triRows");
+  const addTriRowBtn = document.getElementById("addTriRowBtn");
+  const applyTriBtn = document.getElementById("applyTriBtn");
+
+  const sumA = document.getElementById("sumA");
+  const sumB = document.getElementById("sumB");
+  const sumC = document.getElementById("sumC");
+  const sumAll = document.getElementById("sumAll");
+
+  const tableHtml = document.getElementById("tableHtml");
+  const textHtml = document.getElementById("textHtml");
+  const debugJson = document.getElementById("debugJson");
+
+  // State
+  const state = { files: [] };
+  let sb = null;
   let sessionOk = false;
+  let keepAliveTimer = null;
 
-  function setMsg(type, text) {
-    const box = document.getElementById("globalMsg");
-    box.className = "msg " + (type || "warn");
-    box.textContent = text || "";
-    box.style.display = text ? "block" : "none";
+  // Viewer state
+  let viewerFactureId = null;
+  let viewerRawText = "";
+  let viewerData = null; // donnees_brutes
+  let viewerRowCache = []; // editable lines
+  let triCache = []; // editable tri rows
+
+  // Autosave
+  let autosaveTimer = null;
+  let autosaveDirty = false;
+  let lastAutosaveAt = 0;
+
+  // ----------------------------
+  // Utilities
+  // ----------------------------
+  function setMsg(type, text){
+    msgBox.className = "msg " + (type || "warn");
+    msgBox.textContent = text || "";
+    msgBox.style.display = text ? "block" : "none";
   }
-
-  function escapeHtml(s) {
-    return (s || "").replace(/[&<>"']/g, c => ({
+  function escapeHtml(s){
+    return (s||"").replace(/[&<>"']/g, c => ({
       "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"
     }[c]));
   }
-
-  function escapeRegExp(str) {
-    return String(str).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  function escapeRegExp(str){
+    return String(str).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   }
-
-  function formatBytes(bytes) {
-    const b = Number(bytes) || 0;
-    if (b < 1024) return b + " B";
-    const kb = b / 1024;
-    if (kb < 1024) return kb.toFixed(1) + " KB";
-    return (kb / 1024).toFixed(1) + " MB";
+  function formatBytes(bytes){
+    const b = Number(bytes)||0;
+    if(b<1024) return b+" B";
+    const kb=b/1024;
+    if(kb<1024) return kb.toFixed(1)+" KB";
+    return (kb/1024).toFixed(1)+" MB";
   }
-
-  function isPdf(file) {
-    return file && (file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf"));
+  function isPdf(file){
+    return file && (file.type==="application/pdf" || file.name.toLowerCase().endsWith(".pdf"));
   }
-
-  function sanitizeFilename(name) {
+  function sanitizeFilename(name){
     return name.replace(/[^a-zA-Z0-9.\-_]/g, "_").replace(/_{2,}/g, "_");
   }
-
-  // ---------------------------
-  // Parsing helpers (same as V2.6.1)
-  // ---------------------------
-  function normalizeNumber(str) {
-    if (!str) return null;
+  function normalizeSpaces(s){
+    return (s||"").replace(/\s+/g, " ").trim();
+  }
+  function normalizeNumber(str){
+    if(!str) return null;
     const n = String(str).replace(/\s/g, "").replace(",", ".");
     const val = parseFloat(n.replace(/[^0-9.]/g, ""));
     return Number.isFinite(val) ? val : null;
   }
-  function parsePercent(str) {
-    if (!str) return null;
-    const m = String(str).match(/(\d{1,3})\s*%/);
-    return m ? parseInt(m[1], 10) : null;
-  }
-  function parseFrenchDateAny(dateStr) {
-    if (!dateStr) return null;
-    const mNum = String(dateStr).match(/(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/);
-    if (mNum) {
-      let d = parseInt(mNum[1],10), mo = parseInt(mNum[2],10), y = parseInt(mNum[3],10);
-      if (y < 100) y += 2000;
-      return `${y.toString().padStart(4,"0")}-${mo.toString().padStart(2,"0")}-${d.toString().padStart(2,"0")}`;
+  function parseFrenchDateAny(dateStr){
+    if(!dateStr) return null;
+    const s = String(dateStr).trim();
+    const mNum = s.match(/(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/);
+    if(mNum){
+      let d=parseInt(mNum[1],10), mo=parseInt(mNum[2],10), y=parseInt(mNum[3],10);
+      if(y<100) y+=2000;
+      return `${y.toString().padStart(4,"0")}-${String(mo).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
     }
     const months = {
-      "janvier":1, "février":2, "fevrier":2, "mars":3, "avril":4, "mai":5, "juin":6,
-      "juillet":7, "août":8, "aout":8, "septembre":9, "octobre":10, "novembre":11,
-      "décembre":12, "decembre":12
+      "janvier":1,"février":2,"fevrier":2,"mars":3,"avril":4,"mai":5,"juin":6,
+      "juillet":7,"août":8,"aout":8,"septembre":9,"octobre":10,"novembre":11,
+      "décembre":12,"decembre":12
     };
-    const mTxt = String(dateStr).toLowerCase().match(/(\d{1,2})\s+(janvier|février|fevrier|mars|avril|mai|juin|juillet|août|aout|septembre|octobre|novembre|décembre|decembre)\s+(\d{4})/);
-    if (mTxt) {
-      const d = parseInt(mTxt[1],10);
-      const mo = months[mTxt[2]];
-      const y = parseInt(mTxt[3],10);
-      if (!mo) return null;
-      return `${y.toString().padStart(4,"0")}-${String(mo).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+    const mTxt = s.toLowerCase().match(/(\d{1,2})\s+(janvier|février|fevrier|mars|avril|mai|juin|juillet|août|aout|septembre|octobre|novembre|décembre|decembre)\s+(\d{4})/);
+    if(mTxt){
+      const d=parseInt(mTxt[1],10), mo=months[mTxt[2]], y=parseInt(mTxt[3],10);
+      if(!mo) return null;
+      return `${y}-${String(mo).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
     }
     return null;
   }
-
-  function splitSourceDest(desc) {
-    let source = null, destination = null;
-    const mFromTo = String(desc||"").match(/de\s+(.+?)\s+à\s+(.+)/i);
-    if (mFromTo) { source = mFromTo[1].trim(); destination = mFromTo[2].trim(); }
-    const mArrow = String(desc||"").match(/(.+?)\s*(?:=>|>\s*=>?|=\s*>)\s*(.+)/);
-    if (mArrow) { source = source || mArrow[1].trim(); destination = destination || mArrow[2].trim(); }
-    return { source_lieu: source, destination_lieu: destination };
-  }
-
-  function extractSubTrips(desc) {
-    if (!desc) return [];
-    const txt = String(desc).replace(/\s+/g, " ").trim();
-    const re = /(\b\d{1,2}h\d{2}\b)\s+(.+?)(?=(\b\d{1,2}h\d{2}\b)|$)/g;
-    const trips = [];
-    let m;
-    while ((m = re.exec(txt)) !== null) {
-      const heure = m[1];
-      let chunk = (m[2] || "").replace(/\s+/g, " ").trim();
-      let pax = null;
-      const mp = chunk.match(/\bx?\s*(\d{1,3})\s*(pax|pers|personnes)\b/i);
-      if (mp) pax = parseInt(mp[1], 10);
-      if (mp) chunk = chunk.replace(mp[0], "").replace(/\s+/g, " ").trim();
-      trips.push({ dest: 0, heure, texte: chunk, pax });
+  function cleanClientName(raw){
+    if(!raw) return null;
+    let s = normalizeSpaces(raw);
+    // stop markers frequently found after recipient block
+    const stops = [" Conditions", " Détail", " Detail", " RIB", " IBAN", " BIC", " Titulaire", " Total", " TVA"];
+    for(const st of stops){
+      const idx = s.indexOf(st);
+      if(idx>2){ s = s.slice(0, idx).trim(); break; }
     }
-    return trips;
-  }
-
-  function cleanClientName(raw) {
-    if (!raw) return null;
-    let s = String(raw).replace(/\s+/g, " ").trim();
-    const stopMarkers = [" Conditions", " Adresse", " Pays", " Numéro", " Numero", " TVA", " Séjours", " Détail", " Detail"];
-    for (const m of stopMarkers) {
-      const idx = s.indexOf(m);
-      if (idx > 2) { s = s.slice(0, idx).trim(); break; }
-    }
-    s = s.replace(/\b(CS|BP)\b[\s\S]*$/i, "").trim();
-    s = s.replace(/\bCEDEX\b[\s\S]*$/i, "").trim();
-    s = s.replace(/\b\d+\s*(bis|ter)?\s+(rue|route|avenue|av\.?|allée|allee|chemin|cours|boulevard|bd|place|impasse|za|zone|montée|montee|mont|quai|passage)\b[\s\S]*$/i, "").trim();
+    // cut zipcode/city tail
     s = s.replace(/\b\d{5}\b[\s\S]*$/g, "").trim();
+    // cut country tail
     s = s.replace(/\b(France|Belgique|Suisse|Luxembourg)\b[\s\S]*$/i, "").trim();
+    // cut trailing punctuation
+    s = s.replace(/[;,:-]+$/g, "").trim();
+
+    // sometimes client comes duplicated: "Association OVAL Association OVAL"
+    // remove immediate duplication
     const parts = s.split(" ");
-    if (parts.length > 2) {
-      const mid = Math.floor(parts.length / 2);
-      const left = parts.slice(0, mid).join(" ");
-      const right = parts.slice(mid).join(" ");
-      if (left.trim() === right.trim()) s = left.trim();
-    }
-    s = s.replace(/[,;:\-]+$/g, "").trim();
-    return s.length >= 2 ? s : null;
-  }
-
-  function parseInvoiceText(fullText) {
-    const out = { version:"parser_table_v262", parsed_at:new Date().toISOString(), fields:{}, matches:[] };
-    const t = fullText || "";
-
-    const mFact = t.match(/\bFacture\s+([A-Z]{2,6}-\d{3,4}-\d{2,})\b/i) || t.match(/\bFACT-\d{4}-\d{2,}\b/);
-    if (mFact) {
-      const val = (mFact[1] || mFact[0]).trim();
-      out.fields.numero_facture = val;
-      out.matches.push({ label:"numero_facture", value: val, raw: mFact[0] });
-    }
-
-    const mDateTxt = t.match(/\b(\d{1,2}\s+(janvier|février|fevrier|mars|avril|mai|juin|juillet|août|aout|septembre|octobre|novembre|décembre|decembre)\s+\d{4})\b/i);
-    if (mDateTxt) {
-      const rawDate = mDateTxt[1].trim();
-      const iso = parseFrenchDateAny(rawDate);
-      if (iso) {
-        out.fields.date_facture = iso;
-        out.matches.push({ label:"date_facture", value: rawDate, raw: rawDate });
+    if(parts.length>=2){
+      const half = Math.floor(parts.length/2);
+      const left = parts.slice(0, half).join(" ");
+      const right = parts.slice(half).join(" ");
+      if(left && right && left.toLowerCase() === right.toLowerCase()){
+        s = left;
       }
     }
-
-    const mDest = t.match(/Destinataire\s+([\s\S]+?)\s+(Conditions|Séjours|Détail|Detail)/i);
-    if (mDest) {
-      const rawClientBlock = mDest[1].replace(/\s+/g," ").trim();
-      const clean = cleanClientName(rawClientBlock);
-      if (clean) {
-        out.fields.client_nom = clean;
-        out.matches.push({ label:"client_nom", value: clean, raw: rawClientBlock });
-      }
-    }
-
-    const mTotals1 = t.match(/Total\s*HT\s+TVA\s*\(\s*\d+%\s*\)\s+Total\s*TTC\s+([0-9\s.,]+)\s*€?\s+([0-9\s.,]+)\s*€?\s+([0-9\s.,]+)\s*€/i);
-    if (mTotals1) {
-      out.fields.total_ht = normalizeNumber(mTotals1[1]);
-      out.fields.total_tva = normalizeNumber(mTotals1[2]);
-      out.fields.total_ttc = normalizeNumber(mTotals1[3]);
-      out.matches.push({ label:"total_ht", value: mTotals1[1], raw: mTotals1[0] });
-      out.matches.push({ label:"total_tva", value: mTotals1[2], raw: mTotals1[0] });
-      out.matches.push({ label:"total_ttc", value: mTotals1[3], raw: mTotals1[0] });
-      return out;
-    }
-
-    const mHT = t.match(/Total\s*HT\s*[:\s]\s*([0-9\s.,]+)\s*€/i);
-    const mTVA = t.match(/\bTVA\s*[:\s]\s*([0-9\s.,]+)\s*€/i);
-    const mTTC = t.match(/Total\s*TTC\s*[:\s]\s*([0-9\s.,]+)\s*€/i);
-    if (mHT) { out.fields.total_ht = normalizeNumber(mHT[1]); out.matches.push({ label:"total_ht", value:mHT[1], raw:mHT[0] }); }
-    if (mTVA) { out.fields.total_tva = normalizeNumber(mTVA[1]); out.matches.push({ label:"total_tva", value:mTVA[1], raw:mTVA[0] }); }
-    if (mTTC) { out.fields.total_ttc = normalizeNumber(mTTC[1]); out.matches.push({ label:"total_ttc", value:mTTC[1], raw:mTTC[0] }); }
-
-    return out;
+    return s || null;
+  }
+  function moneyToEuro(str){
+    const n = normalizeNumber(str);
+    return (n==null) ? "" : (Math.round(n*100)/100).toFixed(2) + " €";
   }
 
-  // ---------------------------
-  // Table detector (same as V2.6.1)
-  // ---------------------------
-  function groupItemsIntoLines(items, baseTolerance = 3.2) {
-    const sorted = [...items].sort((a,b) => b.y - a.y);
-    const lines = [];
-    for (const it of sorted) {
-      const tol = Math.max(baseTolerance, (it.h || 0) * 0.35);
-      let line = lines.find(l => Math.abs(l.y - it.y) <= tol);
-      if (!line) { line = { y: it.y, items: [], tol }; lines.push(line); }
-      line.items.push(it);
-    }
-    for (const l of lines) {
-      l.items.sort((a,b) => a.x - b.x);
-      l.text = l.items.map(i => i.str).join(" ").replace(/\s+/g," ").trim();
-    }
-    lines.sort((a,b) => b.y - a.y);
-    return lines;
-  }
-
-  function detectServiceColumnsFromHeader(lines) {
-    const KEYWORDS = [
-      { key:"type", k:["type"] },
-      { key:"desc", k:["description","détail","detail"] },
-      { key:"pu",   k:["prix","unitaire","pu"] },
-      { key:"qty",  k:["quantité","quantite","qté","qte","quant"] },
-      { key:"tva",  k:["tva"] },
-      { key:"reduc",k:["réduction","reduction"] },
-      { key:"total",k:["total"] }
-    ];
-
-    let best = null;
-    for (const l of lines) {
-      const s = (l.text || "").toLowerCase();
-      let score = 0;
-      for (const kw of KEYWORDS) if (kw.k.some(x => s.includes(x))) score++;
-      if (score >= 3) if (!best || score > best.score) best = { line:l, score };
-    }
-    if (!best) return { found:false, hasReduc:false, xType:0, xDesc:90, xPU:360, xQty:470, xTVA:540, xReduc:585, xTotal:650 };
-
-    const header = best.line;
-    function findX(tokens) {
-      const it = header.items.find(i => tokens.some(t => i.str.toLowerCase().includes(t)));
-      return it ? it.x : null;
-    }
-
-    const xDesc = findX(["description","détail","detail"]) ?? 120;
-    const xPU = findX(["prix"]) ?? 360;
-    const xQty = findX(["quant"]) ?? 470;
-    const xTVA = findX(["tva"]) ?? 540;
-
-    const xReducMaybe = findX(["réduction","reduction"]);
-    const hasReduc = xReducMaybe != null;
-
-    const xTotal = (() => {
-      const totals = header.items.filter(i => i.str.toLowerCase().includes("total"));
-      if (totals.length) return totals[totals.length - 1].x;
-      return 650;
-    })();
-    const xReduc = hasReduc ? xReducMaybe : Math.min(xTotal - 40, xTVA + 50);
-    return { found:true, headerY: header.y, hasReduc, xType:0, xDesc, xPU, xQty, xTVA, xReduc, xTotal };
-  }
-
-  function lineToRow(line, cols) {
-    const cells = { type:"", desc:"", pu:"", qty:"", tva:"", reduc:"", total:"" };
-    for (const it of line.items) {
-      const x = it.x;
-      const str = it.str;
-      if (x < cols.xDesc) cells.type += (cells.type ? " " : "") + str;
-      else if (x < cols.xPU) cells.desc += (cells.desc ? " " : "") + str;
-      else if (x < cols.xQty) cells.pu += (cells.pu ? " " : "") + str;
-      else if (x < cols.xTVA) cells.qty += (cells.qty ? " " : "") + str;
-      else if (cols.hasReduc && x < cols.xReduc) cells.tva += (cells.tva ? " " : "") + str;
-      else if (cols.hasReduc && x < cols.xTotal) cells.reduc += (cells.reduc ? " " : "") + str;
-      else if (!cols.hasReduc && x < cols.xTotal) cells.tva += (cells.tva ? " " : "") + str;
-      else cells.total += (cells.total ? " " : "") + str;
-    }
-    for (const k of Object.keys(cells)) cells[k] = cells[k].replace(/\s+/g," ").trim();
-    return cells;
-  }
-
-  function fixRowMoneyColumns(row) {
-    if ((!row.total || row.total.trim() === "") && row.tva) {
-      const m = row.tva.match(/([0-9][0-9\s]*[,\.]\d{2})\s*€?/);
-      if (m) {
-        const money = m[1].trim() + " €";
-        row.total = money;
-        row.tva = row.tva.replace(m[0], "").replace(/\s+/g, " ").trim();
-      }
-    }
-    if (row.tva) {
-      const mp = row.tva.match(/(\d{1,3}\s*%)/);
-      row.tva = mp ? mp[1] : row.tva;
-    }
-    return row;
-  }
-
-  function recoverDescFromRaw(raw, row) {
-    let s = raw || "";
-    s = s.replace(/^Service\s*/i, "").trim();
-    const removeList = [row.pu, row.qty, row.tva, row.reduc, row.total].filter(Boolean);
-    for (const part of removeList) {
-      const esc = part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      s = s.replace(new RegExp(esc, "g"), " ").trim();
-    }
-    s = s.replace(/\s+/g, " ").trim();
-    return s;
-  }
-
-  function postFixEmptyDescriptions(services) {
-    for (let i = 1; i < services.length; i++) {
-      const cur = services[i];
-      const prev = services[i - 1];
-      const curNoDesc = (!cur.desc || cur.desc.trim().length < 3);
-      const curHasMoney = (cur.pu || cur.total);
-      if (!curNoDesc || !curHasMoney) continue;
-
-      const prevDesc = prev.desc || "";
-      const dateMatches = prevDesc.match(/\b\d{2}\/\d{2}\/\d{4}\b/g);
-      if (dateMatches && dateMatches.length >= 2) {
-        const second = dateMatches[1];
-        const idx = prevDesc.indexOf(second);
-        if (idx > 0) {
-          prev.desc = prevDesc.slice(0, idx).trim();
-          cur.desc = prevDesc.slice(idx).trim();
-        }
-      }
-    }
-    return services;
-  }
-
-  function extractPdfTableFromTextContent(textContent) {
-    const items = textContent.items.map(it => ({
-      str: (it.str || "").trim(),
-      x: it.transform[4],
-      y: it.transform[5],
-      h: Math.abs(it.transform[3]) || it.height || 0
-    })).filter(it => it.str.length);
-
-    const lines = groupItemsIntoLines(items, 3.2);
-    const cols = detectServiceColumnsFromHeader(lines);
-
-    let tableStartIndex = 0;
-    if (cols.found) {
-      tableStartIndex = lines.findIndex(l => l.y === cols.headerY);
-      if (tableStartIndex < 0) tableStartIndex = 0;
-    }
-
-    const region = lines.slice(tableStartIndex + 1);
-    const stopRe = /(total\s*ht|total\s*ttc|page\s+\d+|ribs?|iban|bic|si[eè]ge\s+social|conditions)/i;
-
-    const tableLines = [];
-    for (const l of region) {
-      if (stopRe.test(l.text)) break;
-      tableLines.push(l);
-    }
-
-    const services = [];
-    const debours = [];
-    const hasMoney = (s) => /[0-9]\s*[0-9\s]*[,\.]\d{2}/.test(s) || (/€/.test(s) && /\d/.test(s));
-    const hasPercent = (s) => /\b\d{1,3}\s*%/.test(s);
-
-    let lastService = null;
-
-    for (const l of tableLines) {
-      const raw = l.text || "";
-      if (!raw) continue;
-      if (/débours/i.test(raw)) { debours.push(raw); lastService = null; continue; }
-
-      const row = lineToRow(l, cols);
-      fixRowMoneyColumns(row);
-
-      const looksLikeContinuation =
-        !row.type && row.desc && !hasMoney(row.pu) && !hasMoney(row.total) && !hasPercent(row.tva) && !hasPercent(row.reduc);
-
-      if (looksLikeContinuation && lastService) {
-        lastService.desc = (lastService.desc + " " + row.desc).replace(/\s+/g," ").trim();
-        continue;
-      }
-
-      const isService =
-        /service/i.test(row.type) ||
-        (row.desc && (hasMoney(row.total) || hasMoney(row.pu)) && (row.qty || hasPercent(row.tva)));
-
-      if (isService) {
-        if ((!row.desc || row.desc.length < 3) && raw) {
-          const fallback = recoverDescFromRaw(raw, row);
-          if (fallback && /[A-Za-zÀ-ÿ]/.test(fallback)) row.desc = fallback;
-        }
-        services.push(row);
-        lastService = row;
-      }
-    }
-
-    postFixEmptyDescriptions(services);
-
-    return {
-      services,
-      debours,
-      cols,
-      debug: {
-        headerFound: cols.found,
-        hasReduc: cols.hasReduc,
-        headerY: cols.headerY || null,
-        totalLines: lines.length,
-        tableLines: tableLines.length,
-        servicesDetected: services.length
-      }
-    };
-  }
-
-  function parseLinesFromTable(tablePages, parserOut) {
-    const lines = [];
-    let idx = 1;
-
-    const allServices = [];
-    const allDeboursRaw = [];
-
-    for (const p of (tablePages || [])) {
-      if (p?.services) allServices.push(...p.services);
-      if (p?.debours) allDeboursRaw.push(...p.debours);
-    }
-
-    for (const r of allServices) {
-      const desc = (r.desc || "").trim();
-      let dateRaw = null, heure = null, cleanDesc = desc;
-
-      const mDateOnly = desc.match(/^(\d{2}\/\d{2}\/\d{4})\s*:\s*(.*)$/);
-      if (mDateOnly) {
-        dateRaw = mDateOnly[1];
-        cleanDesc = (mDateOnly[2] || "").trim();
-      }
-
-      const mDH = desc.match(/(\d{2}\/\d{2}\/\d{4})\s*:\s*([0-9]{1,2}h[0-9]{0,2})\s*(.*)/);
-      if (mDH) {
-        dateRaw = mDH[1];
-        heure = mDH[2];
-        cleanDesc = (mDH[3] || "").trim() || cleanDesc;
-      }
-
-      if (!heure) {
-        const mh = cleanDesc.match(/\b(\d{1,2}h\d{2})\b/);
-        if (mh) heure = mh[1];
-      }
-
-      const dateIso = dateRaw ? parseFrenchDateAny(dateRaw) : null;
-      const { source_lieu, destination_lieu } = splitSourceDest(cleanDesc);
-
-      const pu = normalizeNumber(r.pu);
-      const qty = parseInt((r.qty || "1").replace(/\D/g,""), 10) || 1;
-      const tva = parsePercent(r.tva) || null;
-      const reduc = parsePercent(r.reduc) || null;
-      const total = normalizeNumber(r.total);
-
-      const sub_trips = extractSubTrips(cleanDesc);
-
-      const obj = {
-        type: "service",
-        ligne_numero: idx++,
-        date_service_raw: dateRaw,
-        date_service: dateIso,
-        heure_service: heure,
-        description_service: cleanDesc,
-        source_lieu,
-        destination_lieu,
-        prix_unitaire_ht: pu,
-        quantite: qty,
-        tva,
-        reduction_percent: reduc,
-        prix_total_ht: total,
-        confidence: "high",
-        source_text: JSON.stringify(r),
-        sub_trips,
-        sub_trips_edit: sub_trips.map(x => ({...x})),
-        tri_rows: sub_trips.map(x => ({ dest:0, heure:x.heure||"", texte:x.texte||"", pax:x.pax ?? null })),
-        tri_meta: { names:["A","B","C"], prices:{a:null,b:null,c:null} }
-      };
-      lines.push(obj);
-
-      if (parserOut?.matches) {
-        parserOut.matches.push({ label:"service_desc", value: cleanDesc, raw: cleanDesc });
-        if (r.total) parserOut.matches.push({ label:"service_total_raw", value: r.total, raw: r.total });
-        if (r.pu) parserOut.matches.push({ label:"service_pu_raw", value: r.pu, raw: r.pu });
-      }
-    }
-
-    for (const raw of allDeboursRaw) {
-      const mAmt = raw.match(/([0-9\s.,]+)\s*€\s*$/);
-      const amountRaw = mAmt ? mAmt[1].trim() : null;
-      const amount = amountRaw ? normalizeNumber(amountRaw) : null;
-      const desc2 = amountRaw ? raw.replace(mAmt[0], "").replace(/\s+/g," ").trim() : raw.trim();
-
-      lines.push({
-        type: "debours",
-        ligne_numero: idx++,
-        description_service: desc2,
-        prix_total_ht: amount,
-        confidence: "high",
-        source_text: raw
-      });
-
-      if (parserOut?.matches) parserOut.matches.push({ label:"debours_desc", value: desc2, raw: raw });
-    }
-
-    return lines;
-  }
-
-  // ---------------------------
-  // Highlight + table render
-  // ---------------------------
-  function getHighlightValues(donnees) {
-    const matches = (donnees && donnees.matches) ? donnees.matches : [];
-    const set = new Set();
-
-    for (const m of matches) {
-      const v = (m?.value || "").toString().trim();
-      if (v.length >= 3 && v.length <= 160) set.add(v);
-    }
-
-    // Also add top-level fields if present
-    const f = (donnees && donnees.fields) ? donnees.fields : {};
-    ["numero_facture","date_facture","client_nom"].forEach(k => {
-      const v = (f[k] || "").toString().trim();
-      if (v.length >= 3 && v.length <= 160) set.add(v);
-    });
-
-    // sort longest first (avoid partial replacement eating bigger tokens)
-    return Array.from(set).sort((a,b) => b.length - a.length);
-  }
-
-  function renderHighlightedText(rawText, highlightValues) {
-    // escape first
-    let html = escapeHtml(rawText || "");
-    for (const val of highlightValues) {
-      const re = new RegExp(escapeRegExp(escapeHtml(val)), "g");
-      html = html.replace(re, `<mark class="hl">${escapeHtml(val)}</mark>`);
-    }
-    return html;
-  }
-
-  function renderTableFromDonnees(donnees) {
-    const pages = (donnees && donnees.table) ? donnees.table : [];
-    const services = [];
-    let hasReduc = false;
-
-    for (const p of pages) {
-      if (p?.cols?.hasReduc) hasReduc = true;
-      if (p?.services?.length) services.push(...p.services);
-    }
-
-    if (!services.length) return `<div class="muted">Aucun tableau détecté.</div>`;
-
-    const thReduc = hasReduc ? `<th>Réduc</th>` : ``;
-
-    const rows = services.map(r => `
-      <tr>
-        <td>${escapeHtml(r.type || "Service")}</td>
-        <td class="desc">${escapeHtml(r.desc || "")}</td>
-        <td>${escapeHtml(r.pu || "")}</td>
-        <td>${escapeHtml(r.qty || "")}</td>
-        <td>${escapeHtml(r.tva || "")}</td>
-        ${hasReduc ? `<td>${escapeHtml(r.reduc || "")}</td>` : ``}
-        <td>${escapeHtml(r.total || "")}</td>
-      </tr>
-    `).join("");
-
-    return `
-      <table class="tablePdf">
-        <thead>
-          <tr>
-            <th>Type</th>
-            <th>Description</th>
-            <th>PU HT</th>
-            <th>Qté</th>
-            <th>TVA</th>
-            ${thReduc}
-            <th>Total HT</th>
-          </tr>
-        </thead>
-        <tbody>${rows}</tbody>
-      </table>
-    `;
-  }
-
-  // ---------------------------
-  // localStorage restore/save list
-  // ---------------------------
-  function saveListStateToLocalStorage() {
-    try {
+  // ----------------------------
+  // localStorage list persistence
+  // ----------------------------
+  function saveList(){
+    try{
       const compact = state.files
-        .filter(it => it.kind === "saved" || (it.kind === "local" && it.factureId))
-        .map(it => ({
-          kind: "saved",
-          fileName: it.kind === "local" ? it.file.name : it.fileName,
-          size: it.kind === "local" ? it.file.size : it.size,
-          status: it.status || "extracted",
-          factureId: it.factureId || null,
-          createdAt: it.createdAt || new Date().toISOString()
+        .filter(x => x.kind==="saved" || (x.kind==="local" && x.factureId))
+        .map(x => ({
+          kind:"saved",
+          fileName: x.kind==="local" ? x.file.name : x.fileName,
+          size: x.kind==="local" ? x.file.size : x.size,
+          status: x.status || "extracted",
+          factureId: x.factureId || null,
+          createdAt: x.createdAt || new Date().toISOString()
         }));
       localStorage.setItem(LS_KEY, JSON.stringify({ savedAt: Date.now(), files: compact }));
-    } catch {}
+    }catch(e){}
   }
-
-  function restoreListStateFromLocalStorage() {
-    try {
+  function restoreList(){
+    try{
       const raw = localStorage.getItem(LS_KEY);
-      if (!raw) return false;
+      if(!raw) return false;
       const data = JSON.parse(raw);
-      if (!data?.files?.length) return false;
+      if(!data?.files?.length) return false;
       state.files = data.files.map(f => ({
-        kind: "saved",
+        kind:"saved",
         fileName: f.fileName || "Facture.pdf",
         size: f.size || 0,
         status: f.status || "extracted",
@@ -904,746 +638,1408 @@
         error: null
       }));
       return true;
-    } catch { return false; }
+    }catch(e){ return false; }
   }
 
-  // ---------------------------
-  // UI render list
-  // ---------------------------
-  function render() {
-    selectedCount.textContent = String(state.files.length);
+  // ----------------------------
+  // Rendering list
+  // ----------------------------
+  function renderList(){
+    count.textContent = String(state.files.length);
 
     const anyBusy = state.files.some(f => ["uploading","extracting"].includes(f.status));
-    startUploadBtn.disabled = !sessionOk || anyBusy || state.files.filter(f => f.kind === "local" && f.status === "ready").length === 0;
+    startBtn.disabled = !sessionOk || anyBusy || state.files.filter(f => f.kind==="local" && f.status==="ready").length===0;
     clearBtn.disabled = anyBusy;
 
-    filesTbody.innerHTML = "";
-    if (state.files.length === 0) {
-      filesTbody.innerHTML = `<tr><td colspan="5" class="muted">Aucun fichier</td></tr>`;
+    tbody.innerHTML = "";
+    if(state.files.length===0){
+      tbody.innerHTML = `<tr><td colspan="5" class="muted">Aucun fichier</td></tr>`;
       return;
     }
 
-    for (let i = 0; i < state.files.length; i++) {
-      const item = state.files[i];
-      const fileName = item.kind === "local" ? item.file.name : item.fileName;
-      const fileSize = item.kind === "local" ? item.file.size : item.size;
+    for(let i=0;i<state.files.length;i++){
+      const it = state.files[i];
+      const fileName = it.kind==="local" ? it.file.name : it.fileName;
+      const size = it.kind==="local" ? it.file.size : it.size;
 
-      const pill = (() => {
-        if (item.status === "ready") return `<span class="pill">prêt</span>`;
-        if (item.status === "uploading") return `<span class="pill">upload…</span>`;
-        if (item.status === "extracting") return `<span class="pill">extraction…</span>`;
-        if (item.status === "extracted") return `<span class="pill ok">OK</span>`;
-        if (item.status === "error") return `<span class="pill err">erreur</span>`;
-        return `<span class="pill">${escapeHtml(item.status || "—")}</span>`;
-      })();
+      let pill = `<span class="pill">${escapeHtml(it.status || "—")}</span>`;
+      if(it.status==="extracted") pill = `<span class="pill ok">OK</span>`;
+      if(it.status==="error") pill = `<span class="pill err">Erreur</span>`;
+      if(it.status==="uploading" || it.status==="extracting") pill = `<span class="pill wait">${escapeHtml(it.status)}</span>`;
 
-      filesTbody.insertAdjacentHTML("beforeend", `
+      tbody.insertAdjacentHTML("beforeend", `
         <tr>
-          <td>${escapeHtml(fileName)}${item.error ? `<div class="muted" style="color:#b00020;">${escapeHtml(item.error)}</div>` : ""}</td>
-          <td>${formatBytes(fileSize)}</td>
-          <td>${pill}</td>
-          <td>${item.factureId ? `<span class="mono">${escapeHtml(item.factureId)}</span>` : `<span class="muted">—</span>`}</td>
           <td>
-            <div class="row-actions">
-              <button class="btn" data-action="remove" data-index="${i}" ${anyBusy ? "disabled":""}>Retirer</button>
-              <button class="btn" data-action="view" data-index="${i}" ${(!item.factureId || item.status!=="extracted") ? "disabled":""}>👁 Voir</button>
+            <div style="font-weight:900;">${escapeHtml(fileName)}</div>
+            ${it.error ? `<div class="muted" style="color:#b91c1c; font-weight:800;">${escapeHtml(it.error)}</div>` : ""}
+          </td>
+          <td>${formatBytes(size)}</td>
+          <td>${pill}</td>
+          <td>${it.factureId ? `<span class="mono">${escapeHtml(it.factureId)}</span>` : `<span class="muted">—</span>`}</td>
+          <td>
+            <div class="actions">
+              <button class="btn small" data-action="remove" data-i="${i}" ${anyBusy?"disabled":""}>Retirer</button>
+              <button class="btn small" data-action="view" data-i="${i}" ${(!it.factureId || it.status!=="extracted")?"disabled":""}>👁 Voir</button>
             </div>
           </td>
         </tr>
       `);
     }
 
-    saveListStateToLocalStorage();
+    saveList();
   }
 
-  filesTbody.addEventListener("click", async (e) => {
-    const btn = e.target.closest("button[data-action]");
-    if (!btn) return;
-    const idx = Number(btn.getAttribute("data-index"));
-    const action = btn.getAttribute("data-action");
-    if (Number.isNaN(idx) || idx < 0 || idx >= state.files.length) return;
+  tbody.addEventListener("click", async (e) => {
+    const b = e.target.closest("button[data-action]");
+    if(!b) return;
+    const idx = Number(b.getAttribute("data-i"));
+    const action = b.getAttribute("data-action");
+    if(Number.isNaN(idx) || idx<0 || idx>=state.files.length) return;
 
-    if (action === "remove") { state.files.splice(idx, 1); render(); return; }
-    if (action === "view") { await openViewer(idx); return; }
+    if(action==="remove"){
+      state.files.splice(idx, 1);
+      renderList();
+    }
+    if(action==="view"){
+      await openViewerByIndex(idx);
+    }
   });
 
-  // ---------------------------
-  // Drop / file input
-  // ---------------------------
-  function addFiles(fileList) {
-    const incoming = Array.from(fileList);
-    for (const file of incoming) {
-      if (state.files.length >= MAX_FILES) break;
-      if (!isPdf(file)) { state.files.push({ kind:"local", file, status:"error", error:"PDF uniquement" }); continue; }
-      if (file.size > MAX_SIZE) { state.files.push({ kind:"local", file, status:"error", error:"Max 10MB" }); continue; }
+  // ----------------------------
+  // Dropzone
+  // ----------------------------
+  function addFiles(fileList){
+    const incoming = Array.from(fileList || []);
+    for(const file of incoming){
+      if(state.files.length >= MAX_FILES) break;
+      if(!isPdf(file)){
+        state.files.push({ kind:"local", file, status:"error", error:"PDF uniquement" });
+        continue;
+      }
+      if(file.size > MAX_SIZE){
+        state.files.push({ kind:"local", file, status:"error", error:"Max 10MB" });
+        continue;
+      }
       state.files.push({ kind:"local", file, status:"ready", error:null, factureId:null, uploadPath:null });
     }
-    render();
+    renderList();
   }
 
   fileInput.addEventListener("change", (e) => addFiles(e.target.files));
-  dropZone.addEventListener("dragover", (e) => { e.preventDefault(); dropZone.classList.add("drag"); });
-  dropZone.addEventListener("dragleave", () => dropZone.classList.remove("drag"));
-  dropZone.addEventListener("drop", (e) => {
+  drop.addEventListener("dragover", (e) => { e.preventDefault(); drop.classList.add("drag"); });
+  drop.addEventListener("dragleave", () => drop.classList.remove("drag"));
+  drop.addEventListener("drop", (e) => {
     e.preventDefault();
-    dropZone.classList.remove("drag");
-    if (e.dataTransfer?.files) addFiles(e.dataTransfer.files);
+    drop.classList.remove("drag");
+    if(e.dataTransfer?.files) addFiles(e.dataTransfer.files);
   });
 
-  clearBtn.onclick = () => { state.files = state.files.filter(it => it.kind === "saved"); render(); };
+  clearBtn.addEventListener("click", () => {
+    // keep saved only
+    state.files = state.files.filter(x => x.kind==="saved");
+    renderList();
+  });
+  reloadBtn.addEventListener("click", () => {
+    state.files = [];
+    restoreList();
+    renderList();
+    setMsg("ok", "✅ Liste rechargée depuis localStorage");
+    setTimeout(()=>setMsg("", ""), 900);
+  });
 
-  // ---------------------------
-  // Modal + Tabs
-  // ---------------------------
-  function closeModal() {
-    textModal.classList.remove("open");
-    textContent.innerHTML = "";
-    tableContent.innerHTML = "";
-    hlBox.innerHTML = "";
-    editHeader.innerHTML = "";
-    editServices.innerHTML = "";
+  backBtn.addEventListener("click", () => {
+    window.location.href = "index.html";
+  });
+
+  // ----------------------------
+  // Tabs
+  // ----------------------------
+  function setTab(name){
+    tabButtons.forEach(b => b.classList.toggle("active", b.dataset.tab===name));
+    tabEdit.style.display = (name==="edit") ? "block" : "none";
+    tabTable.style.display = (name==="table") ? "block" : "none";
+    tabText.style.display = (name==="text") ? "block" : "none";
+    tabDebug.style.display = (name==="debug") ? "block" : "none";
+  }
+  tabButtons.forEach(b => b.addEventListener("click", () => setTab(b.dataset.tab)));
+
+  // ----------------------------
+  // Modal
+  // ----------------------------
+  function openModal(){
+    modal.classList.add("open");
+  }
+  function closeModal(){
+    modal.classList.remove("open");
     viewerFactureId = null;
-    viewerDonneesBrutes = null;
+    viewerRawText = "";
+    viewerData = null;
+    viewerRowCache = [];
+    triCache = [];
     clearTimeout(autosaveTimer);
     autosaveTimer = null;
+    autosaveDirty = false;
   }
-  closeTextBtn.onclick = closeModal;
-  textModal.addEventListener("click", (e) => { if (e.target === textModal) closeModal(); });
+  closeBtn.addEventListener("click", closeModal);
+  modal.addEventListener("click", (e) => { if(e.target === modal) closeModal(); });
 
-  function setTab(which) {
-    editWrap.style.display = (which === "edit") ? "block" : "none";
-    tableWrap.style.display = (which === "table") ? "block" : "none";
-    textWrap.style.display = (which === "text") ? "block" : "none";
-  }
-  tabEditBtn.onclick = () => setTab("edit");
-  tabTableBtn.onclick = () => setTab("table");
-  tabTextBtn.onclick = () => setTab("text");
-
-  copyTextBtn.onclick = async () => {
-    // copy raw text (without markup)
-    const tmp = document.createElement("div");
-    tmp.innerHTML = textContent.innerHTML;
-    const raw = tmp.textContent || tmp.innerText || "";
-    await navigator.clipboard.writeText(raw);
-    copyTextBtn.textContent = "✅ Copié";
-    setTimeout(() => copyTextBtn.textContent = "📋 Copier texte", 900);
-  };
-
-  // ---------------------------
-  // Autosave edited data -> factures
-  // ---------------------------
-  function scheduleAutosave(reason="change") {
-    if (!viewerFactureId || !viewerDonneesBrutes) return;
-
-    clearTimeout(autosaveTimer);
-    autosaveTimer = setTimeout(async () => {
-      if (!sessionOk) {
-        setMsg("warn", "⚠️ Session expirée. Reconnecte-toi pour sauvegarder.");
-        return;
-      }
-      try {
-        const f = viewerDonneesBrutes.fields || {};
-        const payload = {
-          donnees_brutes: viewerDonneesBrutes,
-          client_nom: f.client_nom || null,
-          numero_facture: f.numero_facture || null,
-          date_facture: f.date_facture || null,
-          total_ht: (typeof f.total_ht==="number") ? f.total_ht : null,
-          total_tva: (typeof f.total_tva==="number") ? f.total_tva : null,
-          total_ttc: (typeof f.total_ttc==="number") ? f.total_ttc : null
-        };
-        const { error } = await sb.from("factures").update(payload).eq("id", viewerFactureId);
-        if (error) throw error;
-        setMsg("ok", "✅ Autosave (" + reason + ")");
-        setTimeout(() => setMsg("", ""), 900);
-      } catch (e) {
-        console.error(e);
-        setMsg("err", "❌ Autosave impossible: " + (e?.message || e));
-      }
-    }, 900);
-  }
-
-  // ---------------------------
-  // Editor render (same as V2.6.1)
-  // ---------------------------
-  function renderEditHeader() {
-    const f = viewerDonneesBrutes.fields || (viewerDonneesBrutes.fields = {});
-    editHeader.innerHTML = `
-      <div><div class="label">Numéro facture</div><input data-h="numero_facture" value="${escapeHtml(f.numero_facture || "")}"></div>
-      <div><div class="label">Date facture (YYYY-MM-DD)</div><input data-h="date_facture" value="${escapeHtml(f.date_facture || "")}"></div>
-      <div class="editFull"><div class="label">Nom client (sans adresse)</div><input data-h="client_nom" value="${escapeHtml(f.client_nom || "")}"></div>
-      <div><div class="label">Total HT</div><input data-h="total_ht" value="${escapeHtml(f.total_ht != null ? String(f.total_ht) : "")}"></div>
-      <div><div class="label">Total TVA</div><input data-h="total_tva" value="${escapeHtml(f.total_tva != null ? String(f.total_tva) : "")}"></div>
-      <div><div class="label">Total TTC</div><input data-h="total_ttc" value="${escapeHtml(f.total_ttc != null ? String(f.total_ttc) : "")}"></div>
-    `;
-  }
-
-  function renderTriRows(lineIndex, lineObj) {
-    if (!lineObj.tri_meta) lineObj.tri_meta = { names:["A","B","C"], prices:{a:null,b:null,c:null} };
-    if (!lineObj.tri_rows) lineObj.tri_rows = [];
-
-    const m = lineObj.tri_meta;
-    const names = m.names || ["A","B","C"];
-    const prices = m.prices || {a:null,b:null,c:null};
-    const rows = lineObj.tri_rows || [];
-
-    const rowsHtml = rows.map((r, k) => `
-      <tr>
-        <td style="width:160px;">
-          <select data-tri="dest" data-li="${lineIndex}" data-k="${k}">
-            <option value="0" ${r.dest==0?"selected":""}>A - ${escapeHtml(names[0]||"A")}</option>
-            <option value="1" ${r.dest==1?"selected":""}>B - ${escapeHtml(names[1]||"B")}</option>
-            <option value="2" ${r.dest==2?"selected":""}>C - ${escapeHtml(names[2]||"C")}</option>
-          </select>
-        </td>
-        <td style="width:110px;"><input data-tri="heure" data-li="${lineIndex}" data-k="${k}" value="${escapeHtml(r.heure||"")}"></td>
-        <td><input data-tri="texte" data-li="${lineIndex}" data-k="${k}" value="${escapeHtml(r.texte||"")}"></td>
-        <td style="width:90px;"><input data-tri="pax" data-li="${lineIndex}" data-k="${k}" value="${escapeHtml(r.pax!=null?String(r.pax):"")}"></td>
-        <td style="width:120px;"><button class="btnSmall" data-action="tri-del" data-li="${lineIndex}" data-k="${k}">✖</button></td>
-      </tr>
-    `).join("");
-
-    const sum = (normalizeNumber(prices.a)||0) + (normalizeNumber(prices.b)||0) + (normalizeNumber(prices.c)||0);
-
-    return `
-      <div class="triBox">
-        <div class="triHead">
-          <div class="triNames">
-            <input data-tri-meta="name0" data-li="${lineIndex}" value="${escapeHtml(names[0]||"A")}">
-            <input data-tri-meta="name1" data-li="${lineIndex}" value="${escapeHtml(names[1]||"B")}">
-            <input data-tri-meta="name2" data-li="${lineIndex}" value="${escapeHtml(names[2]||"C")}">
-          </div>
-          <div class="triPrices">
-            <span class="muted small">Prix :</span>
-            <input placeholder="Prix A" data-tri-meta="priceA" data-li="${lineIndex}" value="${escapeHtml(prices.a!=null?String(prices.a):"")}">
-            <input placeholder="Prix B" data-tri-meta="priceB" data-li="${lineIndex}" value="${escapeHtml(prices.b!=null?String(prices.b):"")}">
-            <input placeholder="Prix C" data-tri-meta="priceC" data-li="${lineIndex}" value="${escapeHtml(prices.c!=null?String(prices.c):"")}">
-            <span class="triSum">Total: ${sum.toFixed(2)} €</span>
-          </div>
-        </div>
-
-        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px;">
-          <button class="btnSmall" data-action="tri-add" data-li="${lineIndex}">➕ Ajouter un sous-trajet</button>
-        </div>
-
-        <table class="editTable">
-          <thead><tr><th>Destination</th><th>Heure</th><th>Texte</th><th>Pax</th><th></th></tr></thead>
-          <tbody>${rowsHtml || `<tr><td colspan="5" class="muted">Aucun sous-trajet. Clique “Ajouter”.</td></tr>`}</tbody>
-        </table>
-      </div>
-    `;
-  }
-
-  function renderEditServices() {
-    const services = (viewerDonneesBrutes.lines || []).filter(l => l.type === "service");
-
-    let html = `<table class="editTable">
-      <thead><tr>
-        <th style="width:60px;">#</th>
-        <th>Description</th>
-        <th style="width:110px;">PU</th>
-        <th style="width:70px;">Qté</th>
-        <th style="width:70px;">TVA</th>
-        <th style="width:110px;">Total</th>
-        <th style="width:160px;"></th>
-      </tr></thead><tbody>`;
-
-    services.forEach((l, idx) => {
-      if (!l.sub_trips_edit) l.sub_trips_edit = extractSubTrips(l.description_service || "");
-      if (!l.tri_rows) l.tri_rows = l.sub_trips_edit.map(x => ({ dest:0, heure:x.heure||"", texte:x.texte||"", pax:x.pax??null }));
-
-      html += `
-        <tr>
-          <td>${escapeHtml(String(l.ligne_numero || (idx+1)))}</td>
-          <td><input data-s="desc" data-li="${idx}" value="${escapeHtml(l.description_service||"")}"></td>
-          <td><input data-s="pu" data-li="${idx}" value="${escapeHtml(l.prix_unitaire_ht!=null?String(l.prix_unitaire_ht):"")}"></td>
-          <td><input data-s="qty" data-li="${idx}" value="${escapeHtml(l.quantite!=null?String(l.quantite):"")}"></td>
-          <td><input data-s="tva" data-li="${idx}" value="${escapeHtml(l.tva!=null?String(l.tva):"")}"></td>
-          <td><input data-s="total" data-li="${idx}" value="${escapeHtml(l.prix_total_ht!=null?String(l.prix_total_ht):"")}"></td>
-          <td class="editRowActions">
-            <button class="btnSmall" data-action="toggle-tri" data-li="${idx}">🧭 Tri</button>
-            <button class="btnSmall" data-action="del-service" data-li="${idx}">✖ Suppr</button>
-          </td>
-        </tr>
-        <tr><td colspan="7"><div id="triBox-${idx}" style="display:none;">${renderTriRows(idx, l)}</div></td></tr>
-      `;
-    });
-
-    html += `</tbody></table>`;
-    editServices.innerHTML = html;
-  }
-
-  // Editor events
-  editWrap.addEventListener("input", (e) => {
-    const t = e.target;
-
-    // header
-    if (t.matches("[data-h]")) {
-      const key = t.getAttribute("data-h");
-      const v = t.value;
-      const f = viewerDonneesBrutes.fields || (viewerDonneesBrutes.fields = {});
-      if (key === "total_ht" || key === "total_tva" || key === "total_ttc") f[key] = normalizeNumber(v);
-      else f[key] = v.trim();
-      scheduleAutosave("header");
-      return;
-    }
-
-    // services
-    if (t.matches("[data-s]")) {
-      const k = t.getAttribute("data-s");
-      const li = Number(t.getAttribute("data-li"));
-      const services = (viewerDonneesBrutes.lines || []).filter(l => l.type === "service");
-      const line = services[li];
-      if (!line) return;
-
-      if (k === "desc") {
-        line.description_service = t.value;
-        if (!line.sub_trips_edit || line.sub_trips_edit.__auto) {
-          const trips = extractSubTrips(t.value);
-          trips.__auto = true;
-          line.sub_trips_edit = trips;
-          if (!line.tri_rows || line.tri_rows.__auto) {
-            line.tri_rows = trips.map(x => ({ dest:0, heure:x.heure||"", texte:x.texte||"", pax:x.pax??null }));
-            line.tri_rows.__auto = true;
-          }
-          renderEditServices();
-        }
-      }
-      if (k === "pu") line.prix_unitaire_ht = normalizeNumber(t.value);
-      if (k === "qty") line.quantite = normalizeNumber(t.value);
-      if (k === "tva") line.tva = normalizeNumber(t.value);
-      if (k === "total") line.prix_total_ht = normalizeNumber(t.value);
-
-      scheduleAutosave("service");
-      return;
-    }
-
-    // tri rows/meta
-    if (t.matches("[data-tri],[data-tri-meta]")) {
-      const li = Number(t.getAttribute("data-li"));
-      const services = (viewerDonneesBrutes.lines || []).filter(l => l.type === "service");
-      const line = services[li];
-      if (!line) return;
-
-      if (t.matches("[data-tri-meta]")) {
-        const metaKey = t.getAttribute("data-tri-meta");
-        line.tri_meta = line.tri_meta || { names:["A","B","C"], prices:{a:null,b:null,c:null} };
-        if (metaKey.startsWith("name")) {
-          const i = Number(metaKey.replace("name",""));
-          line.tri_meta.names[i] = t.value;
-        } else {
-          const val = normalizeNumber(t.value);
-          if (metaKey === "priceA") line.tri_meta.prices.a = val;
-          if (metaKey === "priceB") line.tri_meta.prices.b = val;
-          if (metaKey === "priceC") line.tri_meta.prices.c = val;
-        }
-        scheduleAutosave("tri-meta");
-        return;
-      }
-
-      const rowKey = t.getAttribute("data-tri");
-      const k = Number(t.getAttribute("data-k"));
-      line.tri_rows = line.tri_rows || [];
-      const row = line.tri_rows[k];
-      if (!row) return;
-
-      if (rowKey === "dest") row.dest = Number(t.value);
-      if (rowKey === "heure") row.heure = t.value;
-      if (rowKey === "texte") row.texte = t.value;
-      if (rowKey === "pax") row.pax = normalizeNumber(t.value);
-
-      scheduleAutosave("tri-row");
-      return;
-    }
-  });
-
-  editWrap.addEventListener("click", (e) => {
-    const btn = e.target.closest("button[data-action]");
-    if (!btn) return;
-    const action = btn.getAttribute("data-action");
-    const services = (viewerDonneesBrutes.lines || []).filter(l => l.type === "service");
-
-    if (action === "toggle-tri") {
-      const li = Number(btn.getAttribute("data-li"));
-      const box = document.getElementById("triBox-" + li);
-      if (box) box.style.display = (box.style.display === "none" || !box.style.display) ? "block" : "none";
-      return;
-    }
-
-    if (action === "add-service") {
-      const all = viewerDonneesBrutes.lines || (viewerDonneesBrutes.lines = []);
-      const maxNum = Math.max(0, ...all.filter(x=>x.type==="service").map(x=>x.ligne_numero||0));
-      all.push({
-        type:"service", ligne_numero:maxNum+1, description_service:"",
-        prix_unitaire_ht:null, quantite:1, tva:10, prix_total_ht:null,
-        sub_trips_edit:[], tri_rows:[], tri_meta:{ names:["A","B","C"], prices:{a:null,b:null,c:null} }
-      });
-      renderEditServices();
-      scheduleAutosave("add-service");
-      return;
-    }
-
-    if (action === "del-service") {
-      const li = Number(btn.getAttribute("data-li"));
-      const all = viewerDonneesBrutes.lines || [];
-      let count = -1;
-      for (let i=0; i<all.length; i++) {
-        if (all[i].type === "service") count++;
-        if (count === li) { all.splice(i,1); break; }
-      }
-      renderEditServices();
-      scheduleAutosave("del-service");
-      return;
-    }
-
-    if (action === "tri-add") {
-      const li = Number(btn.getAttribute("data-li"));
-      const line = services[li];
-      if (!line) return;
-      line.tri_rows = line.tri_rows || [];
-      line.tri_rows.push({ dest:0, heure:"", texte:"", pax:null });
-      renderEditServices();
-      scheduleAutosave("tri-add");
-      return;
-    }
-
-    if (action === "tri-del") {
-      const li = Number(btn.getAttribute("data-li"));
-      const k = Number(btn.getAttribute("data-k"));
-      const line = services[li];
-      if (!line || !line.tri_rows) return;
-      line.tri_rows.splice(k,1);
-      renderEditServices();
-      scheduleAutosave("tri-del");
-      return;
-    }
-  });
-
-  // ---------------------------
-  // Viewer open
-  // ---------------------------
-  async function openViewer(idx) {
-    const item = state.files[idx];
-    if (!item?.factureId) return;
-
-    const { data, error } = await sb
-      .from("factures")
-      .select("id,fichier_nom,statut,texte_ocr,created_at,donnees_brutes,numero_facture,date_facture,total_ht,total_tva,total_ttc,client_nom")
-      .eq("id", item.factureId)
-      .single();
-    if (error) return setMsg("err", "Erreur lecture: " + error.message);
-
-    viewerFactureId = data.id;
-    viewerDonneesBrutes = data.donnees_brutes || {};
-    if (!viewerDonneesBrutes.fields) viewerDonneesBrutes.fields = {
-      numero_facture: data.numero_facture || null,
-      date_facture: data.date_facture || null,
-      client_nom: data.client_nom || null,
-      total_ht: data.total_ht || null,
-      total_tva: data.total_tva || null,
-      total_ttc: data.total_ttc || null
-    };
-
-    textMeta.innerHTML = `
-      <div><strong>Facture ID :</strong> <span class="mono">${escapeHtml(data.id)}</span></div>
-      <div><strong>Fichier :</strong> ${escapeHtml(data.fichier_nom || "—")}</div>
-      <div><strong>Statut :</strong> <span class="mono">${escapeHtml(data.statut || "—")}</span></div>
-      <div><strong>Créé le :</strong> ${escapeHtml(data.created_at || "—")}</div>
-    `;
-
-    const f = viewerDonneesBrutes.fields || {};
-    hlBox.innerHTML = `
-      <span class="hlTag"># ${escapeHtml(f.numero_facture || "")}</span>
-      <span class="hlTag">📅 ${escapeHtml(f.date_facture || "")}</span>
-      <span class="hlTag">👤 ${escapeHtml(f.client_nom || "")}</span>
-      <span class="hlTag">HT ${escapeHtml(f.total_ht!=null?String(f.total_ht):"")}</span>
-      <span class="hlTag">TTC ${escapeHtml(f.total_ttc!=null?String(f.total_ttc):"")}</span>
-    `;
-
-    renderEditHeader();
-    renderEditServices();
-
-    // TABLE
-    tableContent.innerHTML = renderTableFromDonnees(viewerDonneesBrutes);
-
-    // TEXT + HIGHLIGHTS
-    const rawText = (data.texte_ocr || "").trim();
-    const values = getHighlightValues(viewerDonneesBrutes);
-    textContent.innerHTML = renderHighlightedText(rawText, values);
-
-    setTab("edit");
-    textModal.classList.add("open");
-  }
-
-  // ---------------------------
-  // Supabase init + keepalive
-  // ---------------------------
-  async function waitForSupabaseClient() {
-    for (let i = 0; i < 60; i++) {
-      if (window.SupabaseClient) return window.SupabaseClient;
+  // ----------------------------
+  // Supabase init
+  // ----------------------------
+  async function waitForSupabaseClient(){
+    for(let i=0;i<70;i++){
+      if(window.SupabaseClient) return window.SupabaseClient;
       await new Promise(r => setTimeout(r, 100));
     }
     throw new Error("SupabaseClient non initialisé (timeout)");
   }
 
-  async function refreshSessionFlag() {
-    try {
-      const { data: { user } } = await sb.auth.getUser();
+  async function refreshSession(){
+    try{
+      const { data:{ user } } = await sb.auth.getUser();
       sessionOk = !!user;
-      return sessionOk;
-    } catch { sessionOk = false; return false; }
+      if(sessionOk){
+        authStatus.textContent = "Connecté: " + (user.email || user.id);
+        logoutBtn.disabled = false;
+        email.style.display="none";
+        pass.style.display="none";
+        loginBtn.style.display="none";
+      } else {
+        authStatus.textContent = "Non connecté";
+        logoutBtn.disabled = true;
+        email.style.display="";
+        pass.style.display="";
+        loginBtn.style.display="";
+      }
+      renderList();
+    }catch(e){
+      sessionOk = false;
+      authStatus.textContent = "Non connecté";
+      logoutBtn.disabled = true;
+      renderList();
+    }
   }
 
-  async function ensureLoggedIn() {
-    const { data: { user } } = await sb.auth.getUser();
-    if (!user) throw new Error("Non connecté");
-    return user;
-  }
-
-  function startKeepAlive() {
+  function startKeepAlive(){
     clearInterval(keepAliveTimer);
     keepAliveTimer = setInterval(async () => {
-      const ok = await refreshSessionFlag();
-      if (!ok) {
-        authStatus.textContent = "Session expirée";
-        setMsg("warn", "⚠️ Session expirée. Reconnecte-toi.");
-        render();
-      }
+      await refreshSession();
     }, 120000);
   }
 
-  // ---------------------------
-  // Extraction pipeline (same as V2.6.1)
-  // ---------------------------
-  async function extractParseSaveAndInsert(item) {
-    const { data: signed, error: signErr } = await sb.storage.from("factures").createSignedUrl(item.uploadPath, 60*10);
-    if (signErr) throw signErr;
+  loginBtn.addEventListener("click", async () => {
+    const em = (email.value||"").trim();
+    const pw = pass.value || "";
+    if(!em || !pw){
+      setMsg("warn", "Email + mot de passe requis.");
+      return;
+    }
+    setMsg("warn", "Connexion…");
+    const { error } = await sb.auth.signInWithPassword({ email: em, password: pw });
+    if(error){
+      setMsg("err", "Erreur login: " + error.message);
+      return;
+    }
+    pass.value = "";
+    await refreshSession();
+    setMsg("ok", "✅ Connecté");
+    setTimeout(()=>setMsg("", ""), 900);
+  });
 
-    const res = await fetch(signed.signedUrl);
-    if (!res.ok) throw new Error("Téléchargement PDF impossible");
-    const arrayBuffer = await res.arrayBuffer();
+  logoutBtn.addEventListener("click", async () => {
+    await sb.auth.signOut();
+    await refreshSession();
+    setMsg("warn", "Déconnecté");
+    setTimeout(()=>setMsg("", ""), 900);
+  });
 
-    const pdf = await window.pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-
+  // ----------------------------
+  // Extraction PDF text via PDF.js
+  // ----------------------------
+  async function extractPdfTextFromArrayBuffer(arrayBuffer){
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
     let fullText = "";
-    const tablePages = [];
-
-    for (let p=1; p<=pdf.numPages; p++) {
+    for(let p=1; p<=pdf.numPages; p++){
       const page = await pdf.getPage(p);
       const content = await page.getTextContent();
+      const text = content.items.map(it => it.str).join(" ");
+      fullText += `\n\n=== PAGE ${p} ===\n${text}`;
+    }
+    return fullText.trim();
+  }
 
-      fullText += `\n\n=== PAGE ${p} ===\n` + content.items.map(it => it.str).join(" ");
-      const table = extractPdfTableFromTextContent(content);
-      tablePages.push({ page: p, ...table });
+  // ----------------------------
+  // Parser fields robust (v2.6.5)
+  // ----------------------------
+  function parseFieldsRobust(fullText){
+    const out = { fields:{}, matches:[], version:"parser_table_v265", parsed_at: new Date().toISOString() };
+    const t = normalizeSpaces(fullText || "");
+
+    // Numero facture
+    const mFact = t.match(/\bFacture\s+["']?\s*([A-Z]{2,6}-\d{3,4}-\d{2,}|FACT-\d{4}-\d{2,})\s*["']?/i)
+                || t.match(/\b(FACT-\d{4}-\d{2,})\b/i);
+    if(mFact){
+      const val = (mFact[1] || mFact[0]).replace(/Facture/i, "").replace(/["']/g, "").trim();
+      out.fields.numero_facture = val;
+      out.matches.push({ raw: mFact[0], label:"numero_facture", value: val });
     }
 
-    fullText = fullText.trim();
-    if (fullText.length < 30) throw new Error("Texte extrait vide/trop court (PDF scan ?)");
-
-    const parsed = parseInvoiceText(fullText);
-    parsed.table = tablePages;
-    parsed.lines = parseLinesFromTable(tablePages, parsed);
-    parsed.table_debug = tablePages.map(tp => ({
-      page: tp.page,
-      headerFound: tp.debug?.headerFound,
-      hasReduc: tp.debug?.hasReduc,
-      servicesDetected: tp.debug?.servicesDetected,
-      tableLines: tp.debug?.tableLines
-    }));
-
-    const payload = { texte_ocr: fullText, statut:"extracted", donnees_brutes: parsed };
-
-    if (parsed?.fields?.numero_facture) payload.numero_facture = parsed.fields.numero_facture;
-    if (parsed?.fields?.date_facture) payload.date_facture = parsed.fields.date_facture;
-    if (parsed?.fields?.client_nom) payload.client_nom = parsed.fields.client_nom;
-    if (typeof parsed?.fields?.total_ht === "number") payload.total_ht = parsed.fields.total_ht;
-    if (typeof parsed?.fields?.total_tva === "number") payload.total_tva = parsed.fields.total_tva;
-    if (typeof parsed?.fields?.total_ttc === "number") payload.total_ttc = parsed.fields.total_ttc;
-
-    const { error: updErr } = await sb.from("factures").update(payload).eq("id", item.factureId);
-    if (updErr) throw updErr;
-
-    // Insert lines tables (same as before)
-    const services = parsed.lines.filter(l => l.type === "service");
-    const debours = parsed.lines.filter(l => l.type === "debours");
-
-    if (services.length > 0) {
-      const rowsLF = services.map(l => ({
-        facture_id: item.factureId,
-        ligne_numero: l.ligne_numero,
-        date_service: l.date_service,
-        heure_service: l.heure_service,
-        source_lieu: l.source_lieu,
-        destination_lieu: l.destination_lieu,
-        description_service: l.description_service,
-        trajet_brut: l.description_service,
-        prix_unitaire_ht: l.prix_unitaire_ht,
-        quantite: l.quantite,
-        tva: l.tva,
-        reduction_percent: l.reduction_percent,
-        prix_total_ht: l.prix_total_ht,
-        flags: { confidence:l.confidence, source_text:l.source_text, sub_trips: l.sub_trips || [] }
-      }));
-
-      const { error: lfErr } = await sb.from("lignes_factures").insert(rowsLF);
-      if (lfErr) throw lfErr;
-
-      const year = parsed?.fields?.date_facture ? parseInt(parsed.fields.date_facture.slice(0,4),10) : new Date().getFullYear();
-      const rowsSAS = services.map(l => ({
-        facture_id: item.factureId,
-        annee: year,
-        date_service: l.date_service,
-        heure_service: l.heure_service,
-        source_lieu: l.source_lieu,
-        destination_lieu: l.destination_lieu,
-        source_text: l.source_text,
-        prix_unitaire_ht: l.prix_unitaire_ht,
-        quantite: l.quantite,
-        tva: l.tva,
-        reduction_percent: l.reduction_percent,
-        total_ht: l.prix_total_ht,
-        flags: { confidence:l.confidence, sub_trips: l.sub_trips || [] },
-        status: "READY"
-      }));
-
-      const { error: sasErr } = await sb.from("import_factures_rows").insert(rowsSAS);
-      if (sasErr) throw sasErr;
+    // Date facture
+    const mDateTxt = t.match(/\b(\d{1,2}\s+(janvier|février|fevrier|mars|avril|mai|juin|juillet|août|aout|septembre|octobre|novembre|décembre|decembre)\s+\d{4})\b/i);
+    const mDateNum = t.match(/\b(\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4})\b/);
+    const rawDate = mDateTxt ? mDateTxt[1] : (mDateNum ? mDateNum[1] : null);
+    if(rawDate){
+      const iso = parseFrenchDateAny(rawDate);
+      if(iso){
+        out.fields.date_facture = iso;
+        out.matches.push({ raw: rawDate, label:"date_facture", value: rawDate });
+      }
     }
 
-    if (debours.length > 0) {
-      const rowsDeb = debours.map(l => ({
-        facture_id: item.factureId,
-        ligne_numero: l.ligne_numero,
-        description_service: "DEBOURS: " + l.description_service,
-        trajet_brut: l.description_service,
-        prix_total_ht: l.prix_total_ht,
-        flags: { type:"debours", source_text:l.source_text }
-      }));
-      await sb.from("lignes_factures").insert(rowsDeb);
+    // Client destinataire (bloc après "Destinataire")
+    const mDest = t.match(/Destinataire\s+([\s\S]+?)(Conditions|Détail|Detail|RIB|IBAN|BIC|Total\s*HT|Total\s*TTC)/i);
+    if(mDest){
+      const rawBlock = normalizeSpaces(mDest[1] || "");
+      const clean = cleanClientName(rawBlock);
+      if(clean){
+        out.fields.client_nom = clean;
+        out.matches.push({ raw: rawBlock, label:"client_nom", value: clean });
+      }
+    } else {
+      // fallback: sometimes "Société : Nom : ..." for recipient
+      const mNom = t.match(/Nom\s*:\s*([A-ZÉÈÊÀÂÎÏÔÛÙÇ0-9][\s\S]{2,120}?)(Adresse|Pays|RIB|IBAN|BIC|Conditions|Détail|Total)/i);
+      if(mNom){
+        const clean = cleanClientName(mNom[1]);
+        if(clean){
+          out.fields.client_nom = clean;
+          out.matches.push({ raw: mNom[0], label:"client_nom", value: clean });
+        }
+      }
+    }
+
+    // Totaux
+    const mTotals = t.match(/Total\s*HT[\s:]+([0-9\s.,]+)\s*€[\s\S]{0,80}?TVA[\s\S]{0,50}?([0-9\s.,]+)\s*€[\s\S]{0,80}?Total\s*TTC[\s:]+([0-9\s.,]+)\s*€/i);
+    if(mTotals){
+      out.fields.total_ht = normalizeNumber(mTotals[1]);
+      out.fields.total_tva = normalizeNumber(mTotals[2]);
+      out.fields.total_ttc = normalizeNumber(mTotals[3]);
+      out.matches.push({ raw: mTotals[0], label:"total_ht", value: mTotals[1] });
+      out.matches.push({ raw: mTotals[0], label:"total_tva", value: mTotals[2] });
+      out.matches.push({ raw: mTotals[0], label:"total_ttc", value: mTotals[3] });
+    } else {
+      // fallback: separate lines
+      const mHT = t.match(/Total\s*HT\s*[:\s]\s*([0-9\s.,]+)\s*€/i);
+      const mTVA = t.match(/\bTVA\b[\s\S]{0,10}?([0-9\s.,]+)\s*€/i);
+      const mTTC = t.match(/Total\s*TTC\s*[:\s]\s*([0-9\s.,]+)\s*€/i);
+      if(mHT){ out.fields.total_ht = normalizeNumber(mHT[1]); out.matches.push({ raw: mHT[0], label:"total_ht", value:mHT[1] }); }
+      if(mTVA){ out.fields.total_tva = normalizeNumber(mTVA[1]); out.matches.push({ raw: mTVA[0], label:"total_tva", value:mTVA[1] }); }
+      if(mTTC){ out.fields.total_ttc = normalizeNumber(mTTC[1]); out.matches.push({ raw: mTTC[0], label:"total_ttc", value:mTTC[1] }); }
+    }
+
+    return out;
+  }
+
+  // ----------------------------
+  // Table detector v2.2 (X/Y) — Simplified but robust
+  // It tries:
+  // 1) detect header line "Type Description Prix unitaire HT Quantité TVA Total HT"
+  // 2) compute column X anchors from header tokens
+  // 3) group items by Y into rows
+  // 4) extract cells by X range
+  //
+  // If fails -> fallback OCR table reconstruction
+  // ----------------------------
+  async function extractPdfItemsXY(arrayBuffer){
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    const pages = [];
+    for(let p=1; p<=pdf.numPages; p++){
+      const page = await pdf.getPage(p);
+      const viewport = page.getViewport({ scale: 1.0 });
+      const content = await page.getTextContent();
+      const items = content.items.map(it => {
+        const tx = it.transform; // [a,b,c,d,e,f]
+        const x = tx[4];
+        const y = tx[5];
+        return { str: it.str, x, y, w: it.width || 0, h: it.height || 0 };
+      });
+      pages.push({ page:p, items, viewport });
+    }
+    return pages;
+  }
+
+  function detectHeaderAndCols(items){
+    // find candidate line containing keywords (any order)
+    // We build lines by Y buckets
+    const lines = groupByLine(items, 2.5);
+    let header = null;
+
+    const keywords = ["type","description","prix","unitaire","quantité","quantite","tva","total"];
+    for(const line of lines){
+      const txt = normalizeSpaces(line.text).toLowerCase();
+      let score = 0;
+      for(const k of keywords) if(txt.includes(k)) score++;
+      if(score >= 5){
+        header = line;
+        break;
+      }
+    }
+    if(!header){
+      return { found:false, headerY:null, cols: defaultCols(), headerFound:false };
+    }
+
+    // Determine X anchors from tokens within header line
+    // We'll approximate:
+    // xType: min
+    // xDesc: near "Description"
+    // xPU: near "Prix unitaire"
+    // xQty: near "Quantité"
+    // xTVA: near "TVA"
+    // xTotal: near "Total"
+    const tokens = header.tokens.sort((a,b)=>a.x-b.x);
+    function findTokenX(word){
+      const t = tokens.find(t => normalizeSpaces(t.str).toLowerCase().includes(word));
+      return t ? t.x : null;
+    }
+
+    let xType = tokens[0]?.x ?? 0;
+    let xDesc = findTokenX("description");
+    let xPU = findTokenX("prix");
+    let xQty = findTokenX("quant");
+    let xTVA = findTokenX("tva");
+    let xTotal = findTokenX("total");
+
+    // Fallback approximate if missing
+    const xs = tokens.map(t=>t.x).sort((a,b)=>a-b);
+    const minX = xs[0] || 0;
+    const maxX = xs[xs.length-1] || 700;
+
+    if(xDesc==null) xDesc = minX + (maxX-minX)*0.15;
+    if(xPU==null) xPU = minX + (maxX-minX)*0.58;
+    if(xQty==null) xQty = minX + (maxX-minX)*0.70;
+    if(xTVA==null) xTVA = minX + (maxX-minX)*0.78;
+    if(xTotal==null) xTotal = minX + (maxX-minX)*0.86;
+
+    // detect optional reduction column by presence of "Réduction"
+    const hasReduc = normalizeSpaces(header.text).toLowerCase().includes("réduction") || normalizeSpaces(header.text).toLowerCase().includes("reduction");
+    let xReduc = null;
+    if(hasReduc){
+      xReduc = findTokenX("réduc") || findTokenX("reduc") || (minX + (maxX-minX)*0.82);
+      // shift total a bit right
+      if(xTotal < xReduc) xTotal = xReduc + 40;
+    } else {
+      xReduc = xTVA + 40;
+    }
+
+    return {
+      found:true,
+      headerFound:true,
+      headerY: header.y,
+      cols:{
+        xType, xDesc, xPU, xQty, xTVA, xReduc, xTotal,
+        hasReduc, found:true
+      }
+    };
+  }
+
+  function defaultCols(){
+    return {
+      xType:0, xDesc:90, xPU:360, xQty:470, xTVA:540, xReduc:585, xTotal:650,
+      hasReduc:false, found:false
+    };
+  }
+
+  function groupByLine(items, yTolerance=2.5){
+    const sorted = items.slice().sort((a,b)=> (b.y - a.y) || (a.x - b.x)); // y desc
+    const lines = [];
+    for(const it of sorted){
+      if(!it.str || !it.str.trim()) continue;
+      let line = lines.find(l => Math.abs(l.y - it.y) <= yTolerance);
+      if(!line){
+        line = { y: it.y, tokens: [], text:"" };
+        lines.push(line);
+      }
+      line.tokens.push(it);
+    }
+    for(const l of lines){
+      l.tokens.sort((a,b)=>a.x-b.x);
+      l.text = l.tokens.map(t=>t.str).join(" ");
+    }
+    lines.sort((a,b)=>b.y-a.y);
+    return lines;
+  }
+
+  function isMoneyToken(s){
+    return /[0-9][0-9\s]*[,\.]\d{2}\s*€?/.test(s);
+  }
+  function isQtyToken(s){
+    return /^\s*\d{1,3}\s*$/.test(s);
+  }
+  function isTvaToken(s){
+    return /^\s*\d{1,2}\s*%\s*$/.test(s) || /\bTVA\b/i.test(s);
+  }
+
+  function extractTableFromXY(pageItems){
+    // detect header + cols
+    const head = detectHeaderAndCols(pageItems);
+    const cols = head.cols || defaultCols();
+    const headerY = head.headerY;
+
+    // group by lines and pick those below header
+    const lines = groupByLine(pageItems, 2.5);
+    const tableLines = [];
+    let inTable = false;
+
+    for(const l of lines){
+      if(headerY!=null && l.y <= headerY + 1){ // below header
+        inTable = true;
+      }
+      if(!inTable) continue;
+
+      // stop when totals/footer
+      const txt = normalizeSpaces(l.text).toLowerCase();
+      if(txt.includes("total ht") && txt.includes("total ttc")) break;
+      if(txt.includes("sas au capital") || txt.includes("sarl au capital")) break;
+      if(txt.includes("page") && txt.includes("sur")) continue;
+
+      tableLines.push(l);
+    }
+
+    // build rows: a row begins with "Service" or "Débours" in Type column region
+    const rows = [];
+    let current = null;
+
+    function flush(){
+      if(current){
+        rows.push(current);
+        current = null;
+      }
+    }
+
+    for(const l of tableLines){
+      const tokens = l.tokens;
+      // slice tokens into columns by X thresholds
+      const cell = getCellsFromLine(tokens, cols);
+      const type = normalizeSpaces(cell.type).toLowerCase();
+      const hasType = type.includes("service") || type.includes("debours") || type.includes("débours") || type.includes("frais") || type.includes("prest");
+      const hasMoney = isMoneyToken(cell.pu) || isMoneyToken(cell.total);
+
+      if(hasType && hasMoney){
+        flush();
+        current = { type: cell.type, desc: cell.desc, pu: cell.pu, qty: cell.qty, tva: cell.tva, reduc: cell.reduc, total: cell.total };
+      } else {
+        // continuation line -> append to desc if current exists
+        if(current){
+          const extra = normalizeSpaces(l.text);
+          if(extra && extra.length>1){
+            // remove repeated money tokens from continuation
+            const extraClean = extra.replace(/[0-9][0-9\s]*[,\.]\d{2}\s*€?/g, "").replace(/\s+/g, " ").trim();
+            if(extraClean) current.desc = normalizeSpaces(current.desc + " " + extraClean);
+          }
+        }
+      }
+    }
+    flush();
+
+    // basic cleanup
+    const services = rows
+      .filter(r => normalizeSpaces(r.type).toLowerCase().includes("service") || normalizeSpaces(r.type).toLowerCase().includes("debours") || normalizeSpaces(r.type).toLowerCase().includes("débours"))
+      .map(r => ({
+        type: normalizeSpaces(r.type) || "Service",
+        desc: normalizeSpaces(r.desc),
+        pu: normalizeSpaces(r.pu),
+        qty: normalizeSpaces(r.qty),
+        tva: normalizeSpaces(r.tva),
+        reduc: normalizeSpaces(r.reduc),
+        total: normalizeSpaces(r.total)
+      }))
+      .filter(r => r.desc || r.total || r.pu);
+
+    return {
+      cols: cols,
+      debug: {
+        headerFound: head.headerFound,
+        headerY: headerY ?? null,
+        hasReduc: cols.hasReduc,
+        tableLines: tableLines.length,
+        servicesDetected: services.length,
+        totalLines: lines.length
+      },
+      services,
+      debours: []
+    };
+  }
+
+  function getCellsFromLine(tokens, cols){
+    // allocate tokens to a cell based on x threshold
+    const typeTokens=[], descTokens=[], puTokens=[], qtyTokens=[], tvaTokens=[], reducTokens=[], totalTokens=[];
+    for(const t of tokens){
+      const x = t.x;
+      const s = t.str;
+      if(x < cols.xDesc) typeTokens.push(s);
+      else if(x < cols.xPU) descTokens.push(s);
+      else if(x < cols.xQty) puTokens.push(s);
+      else if(x < cols.xTVA) qtyTokens.push(s);
+      else if(cols.hasReduc && x < cols.xReduc) tvaTokens.push(s);
+      else if(cols.hasReduc && x < cols.xTotal) reducTokens.push(s);
+      else if(!cols.hasReduc && x < cols.xTotal) tvaTokens.push(s);
+      else totalTokens.push(s);
+    }
+    return {
+      type: typeTokens.join(" "),
+      desc: descTokens.join(" "),
+      pu: puTokens.join(" "),
+      qty: qtyTokens.join(" "),
+      tva: tvaTokens.join(" "),
+      reduc: reducTokens.join(" "),
+      total: totalTokens.join(" ")
+    };
+  }
+
+  // ----------------------------
+  // Fallback OCR table reconstruction (Claude-like)
+  // Works from text if XY table empty or header missing
+  // ----------------------------
+  function fallbackTableFromOCRText(fullText){
+    const t = normalizeSpaces(fullText || "");
+    const services = [];
+
+    // Split by "Service" keyword. If absent, fallback to scan money patterns.
+    const chunks = t.split(/\bService\b/i);
+    if(chunks.length > 1){
+      for(const rawChunk of chunks.slice(1)){
+        const c = normalizeSpaces(rawChunk);
+        // find money values
+        const moneyRe = /([0-9][0-9\s]*[,\.]\d{2})\s*€/g;
+        const moneys = Array.from(c.matchAll(moneyRe)).map(m => (m[1]+" €").replace(/\s+/g, " ").trim());
+        if(moneys.length < 2) continue;
+
+        const total = moneys[moneys.length-1];
+        const pu = moneys[0];
+
+        const mTVA = c.match(/\b(\d{1,3})\s*%\b/);
+        const tva = mTVA ? (mTVA[1]+"%") : "10%";
+
+        // qty heuristic
+        let qty = "1";
+        const idx = c.indexOf(pu.replace(" €",""));
+        if(idx >= 0){
+          const after = c.slice(idx);
+          const mQty = after.match(/\b(\d{1,3})\b/);
+          if(mQty) qty = mQty[1];
+        }
+
+        let desc = c;
+        const cut = c.indexOf(pu.replace(" €",""));
+        if(cut>0) desc = c.slice(0, cut).trim();
+        desc = normalizeSpaces(desc);
+
+        services.push({ type:"Service", desc, pu, qty, tva, reduc:"", total });
+      }
+    } else {
+      // fallback scan: detect patterns with dates + money
+      const lines = (fullText||"").split(/\n/).map(l => l.trim()).filter(Boolean);
+      for(const l of lines){
+        if(!/[0-9][0-9\s]*[,\.]\d{2}\s*€/.test(l)) continue;
+        const mAll = Array.from(l.matchAll(/([0-9][0-9\s]*[,\.]\d{2})\s*€/g)).map(m => (m[1]+" €").replace(/\s+/g," ").trim());
+        if(mAll.length < 2) continue;
+        services.push({
+          type:"Service",
+          desc: normalizeSpaces(l.replace(/([0-9][0-9\s]*[,\.]\d{2})\s*€/g, "").trim()),
+          pu: mAll[0],
+          qty: "1",
+          tva: "10%",
+          reduc:"",
+          total: mAll[mAll.length-1]
+        });
+      }
+    }
+
+    return {
+      cols: defaultCols(),
+      debug:{
+        headerFound:false,
+        headerY:null,
+        hasReduc:false,
+        tableLines: 0,
+        servicesDetected: services.length,
+        totalLines: 0,
+        fallback:true
+      },
+      services,
+      debours:[]
+    };
+  }
+
+  // ----------------------------
+  // Highlight helpers
+  // ----------------------------
+  function getHighlightValues(data){
+    const set = new Set();
+    const matches = data?.matches || [];
+    for(const m of matches){
+      const v = (m.value || "").toString().trim();
+      if(v.length>=3 && v.length<=220) set.add(v);
+    }
+    const f = data?.fields || {};
+    ["numero_facture","date_facture","client_nom"].forEach(k => {
+      const v = (f[k]||"").toString().trim();
+      if(v.length>=3 && v.length<=220) set.add(v);
+    });
+    return Array.from(set).sort((a,b)=>b.length-a.length);
+  }
+
+  function renderHighlightedText(rawText, values){
+    let html = escapeHtml(rawText || "");
+    for(const v of values){
+      const re = new RegExp(escapeRegExp(escapeHtml(v)), "g");
+      html = html.replace(re, `<mark class="hl">${escapeHtml(v)}</mark>`);
+    }
+    return html;
+  }
+
+  function renderTableHtml(data){
+    const pages = data?.table || [];
+    const rows = [];
+    for(const p of pages){
+      if(p?.services?.length) rows.push(...p.services);
+    }
+    if(rows.length===0){
+      return `<div class="muted">Aucun tableau détecté (même fallback). Vérifie le texte extrait.</div>`;
+    }
+
+    const hasReduc = rows.some(r => (r.reduc||"").trim().length>0);
+
+    return `
+      <table class="editTable">
+        <thead>
+          <tr>
+            <th>Type</th>
+            <th>Description</th>
+            <th>PU HT</th>
+            <th>Qté</th>
+            <th>TVA</th>
+            ${hasReduc ? "<th>Réduc</th>" : ""}
+            <th>Total HT</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.map(r => `
+            <tr>
+              <td>${escapeHtml(r.type || "Service")}</td>
+              <td>${escapeHtml(r.desc || "")}</td>
+              <td>${escapeHtml(r.pu || "")}</td>
+              <td>${escapeHtml(r.qty || "")}</td>
+              <td>${escapeHtml(r.tva || "")}</td>
+              ${hasReduc ? `<td>${escapeHtml(r.reduc || "")}</td>` : ""}
+              <td>${escapeHtml(r.total || "")}</td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    `;
+  }
+
+  // ----------------------------
+  // Editor render
+  // ----------------------------
+  function renderViewerHeader(){
+    const f = viewerData?.fields || (viewerData.fields = {});
+    editHeader.innerHTML = `
+      <div>
+        <div class="label">Numéro facture</div>
+        <input data-h="numero_facture" value="${escapeHtml(f.numero_facture || "")}">
+      </div>
+      <div>
+        <div class="label">Date facture (YYYY-MM-DD)</div>
+        <input data-h="date_facture" value="${escapeHtml(f.date_facture || "")}">
+      </div>
+      <div class="full">
+        <div class="label">Client (nom seul)</div>
+        <input data-h="client_nom" value="${escapeHtml(f.client_nom || "")}">
+      </div>
+      <div>
+        <div class="label">Total HT</div>
+        <input data-h="total_ht" value="${escapeHtml(f.total_ht!=null ? String(f.total_ht) : "")}">
+      </div>
+      <div>
+        <div class="label">Total TVA</div>
+        <input data-h="total_tva" value="${escapeHtml(f.total_tva!=null ? String(f.total_tva) : "")}">
+      </div>
+      <div>
+        <div class="label">Total TTC</div>
+        <input data-h="total_ttc" value="${escapeHtml(f.total_ttc!=null ? String(f.total_ttc) : "")}">
+      </div>
+    `;
+  }
+
+  function normalizeLineRow(r){
+    return {
+      type: r.type || "Service",
+      desc: r.desc || "",
+      pu: r.pu || "",
+      qty: r.qty || "1",
+      tva: r.tva || "10%",
+      reduc: r.reduc || "",
+      total: r.total || ""
+    };
+  }
+
+  function loadViewerLinesFromData(){
+    // flatten table services into editable cache
+    const rows = [];
+    const pages = viewerData?.table || [];
+    for(const p of pages){
+      if(p?.services?.length) rows.push(...p.services);
+    }
+    viewerRowCache = rows.map(normalizeLineRow);
+    if(viewerRowCache.length===0){
+      // fallback: create 1 blank line so user can fill
+      viewerRowCache = [normalizeLineRow({})];
     }
   }
 
-  async function uploadAndProcessOne(item) {
-    item.status = "uploading"; item.error = null; render();
-    try {
+  function renderViewerLines(){
+    const hasReduc = viewerRowCache.some(r => (r.reduc||"").trim().length>0);
+    const reducTh = hasReduc ? "<th>Réduc</th>" : "";
+
+    editLines.innerHTML = `
+      <table class="editTable">
+        <thead>
+          <tr>
+            <th>Type</th>
+            <th>Description</th>
+            <th>PU</th>
+            <th>Qté</th>
+            <th>TVA</th>
+            ${reducTh}
+            <th>Total</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${viewerRowCache.map((r, idx) => `
+            <tr data-line="${idx}">
+              <td>
+                <select data-k="type">
+                  <option ${r.type==="Service"?"selected":""}>Service</option>
+                  <option ${r.type.toLowerCase().includes("débours")?"selected":""}>Débours</option>
+                </select>
+              </td>
+              <td><input data-k="desc" value="${escapeHtml(r.desc)}"></td>
+              <td><input data-k="pu" value="${escapeHtml(r.pu)}"></td>
+              <td><input data-k="qty" value="${escapeHtml(r.qty)}"></td>
+              <td><input data-k="tva" value="${escapeHtml(r.tva)}"></td>
+              ${hasReduc ? `<td><input data-k="reduc" value="${escapeHtml(r.reduc)}"></td>` : ""}
+              <td><input data-k="total" value="${escapeHtml(r.total)}"></td>
+              <td>
+                <div class="actions">
+                  <button class="btn small" data-action="dup-line" data-idx="${idx}">Dupliquer</button>
+                  <button class="btn small" data-action="del-line" data-idx="${idx}">Supprimer</button>
+                </div>
+              </td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+      <div class="muted small" style="margin-top:8px;">
+        ✅ Tu peux modifier chaque cellule. Les changements sont autosave (toutes les 600ms).
+      </div>
+    `;
+  }
+
+  function updateViewerDataTableFromCache(){
+    // Build a single page table from cache (simpler)
+    viewerData.table = [{
+      page: 0,
+      cols: defaultCols(),
+      debug: { headerFound: true, servicesDetected: viewerRowCache.length, rebuiltFromEditor:true },
+      services: viewerRowCache.map(r => ({
+        type: r.type || "Service",
+        desc: normalizeSpaces(r.desc),
+        pu: normalizeSpaces(r.pu),
+        qty: normalizeSpaces(r.qty),
+        tva: normalizeSpaces(r.tva),
+        reduc: normalizeSpaces(r.reduc),
+        total: normalizeSpaces(r.total)
+      })),
+      debours:[]
+    }];
+  }
+
+  // ----------------------------
+  // Tri destinations editor
+  // ----------------------------
+  function initTriFromLines(){
+    // If we already have tri in donnees_brutes, load it
+    const tri = viewerData?.tri || null;
+    if(tri){
+      triNameA.value = tri.nameA || "A";
+      triNameB.value = tri.nameB || "B";
+      triNameC.value = tri.nameC || "C";
+      triCache = (tri.rows || []).map(r => ({
+        label: r.label || "",
+        cat: r.cat || "A",
+        price: r.price || "",
+        qty: r.qty || "1"
+      }));
+    } else {
+      // default tri names
+      triNameA.value = "Excursions";
+      triNameB.value = "Navettes";
+      triNameC.value = "Débours";
+      // seed tri rows from services
+      triCache = viewerRowCache.map(r => ({
+        label: r.desc || "",
+        cat: "A",
+        price: r.total || r.pu || "",
+        qty: r.qty || "1"
+      }));
+    }
+    renderTri();
+    computeTriSums();
+  }
+
+  function renderTri(){
+    triRows.innerHTML = triCache.map((r, idx) => `
+      <div class="triRow" data-tri="${idx}">
+        <input data-k="label" value="${escapeHtml(r.label)}" placeholder="Libellé...">
+        <input data-k="cat" value="${escapeHtml(r.cat)}" placeholder="A/B/C">
+        <input data-k="price" value="${escapeHtml(r.price)}" placeholder="Prix HT">
+        <input data-k="qty" value="${escapeHtml(r.qty)}" placeholder="Qté">
+        <button class="btn small" data-action="del-tri" data-idx="${idx}">Supprimer</button>
+      </div>
+    `).join("");
+  }
+
+  function computeTriSums(){
+    let a=0,b=0,c=0;
+    for(const r of triCache){
+      const cat = (r.cat||"A").trim().toUpperCase();
+      const qty = normalizeNumber(r.qty) ?? parseInt((r.qty||"1").trim(),10) || 1;
+      const price = normalizeNumber(r.price) ?? 0;
+      const val = price * qty;
+      if(cat==="A") a += val;
+      else if(cat==="B") b += val;
+      else c += val;
+    }
+    sumA.textContent = `${triNameA.value || "A"}: ${a.toFixed(2)}€`;
+    sumB.textContent = `${triNameB.value || "B"}: ${b.toFixed(2)}€`;
+    sumC.textContent = `${triNameC.value || "C"}: ${c.toFixed(2)}€`;
+    sumAll.textContent = `Total: ${(a+b+c).toFixed(2)}€`;
+  }
+
+  function saveTriToViewerData(){
+    viewerData.tri = {
+      nameA: triNameA.value || "A",
+      nameB: triNameB.value || "B",
+      nameC: triNameC.value || "C",
+      rows: triCache.map(r => ({ label:r.label, cat:r.cat, price:r.price, qty:r.qty }))
+    };
+  }
+
+  function autoSuggestTri(){
+    // Very basic suggestion based on keywords
+    const kwC = ["péage","peage","parking","repas","hôtel","hotel","billet","entrée","entree","taxi","avion","train","frais"];
+    const kwB = ["navette","transfert","aéroport","aeroport","gare","retour","arrivée","arrivee"];
+    for(const r of triCache){
+      const s = (r.label||"").toLowerCase();
+      if(kwC.some(k => s.includes(k))) r.cat = "C";
+      else if(kwB.some(k => s.includes(k))) r.cat = "B";
+      else r.cat = "A";
+    }
+    renderTri();
+    computeTriSums();
+    autosaveSchedule("tri-suggest");
+  }
+
+  // ----------------------------
+  // Autosave (robust)
+  // ----------------------------
+  function autosaveSchedule(reason="change"){
+    autosaveDirty = true;
+    autosaveInfo.textContent = "✍️ Modifications…";
+    clearTimeout(autosaveTimer);
+    autosaveTimer = setTimeout(async () => {
+      if(!viewerFactureId || !viewerData || !sessionOk) return;
+      // merge editor cache into viewerData
+      updateViewerDataTableFromCache();
+      saveTriToViewerData();
+
+      try{
+        const f = viewerData.fields || {};
+        const payload = {
+          donnees_brutes: viewerData,
+          numero_facture: f.numero_facture || null,
+          date_facture: f.date_facture || null,
+          client_nom: f.client_nom || null,
+          total_ht: (typeof f.total_ht==="number") ? f.total_ht : (normalizeNumber(f.total_ht) ?? null),
+          total_tva: (typeof f.total_tva==="number") ? f.total_tva : (normalizeNumber(f.total_tva) ?? null),
+          total_ttc: (typeof f.total_ttc==="number") ? f.total_ttc : (normalizeNumber(f.total_ttc) ?? null),
+          statut: "extracted"
+        };
+        const { error } = await sb.from("factures").update(payload).eq("id", viewerFactureId);
+        if(error) throw error;
+        autosaveDirty = false;
+        lastAutosaveAt = Date.now();
+        autosaveInfo.textContent = "✅ Autosave (" + reason + ")";
+        setTimeout(() => {
+          if(!autosaveDirty) autosaveInfo.textContent = "Dernière sauvegarde: " + new Date(lastAutosaveAt).toLocaleTimeString();
+        }, 1000);
+        // refresh viewer tabs rendering
+        tableHtml.innerHTML = renderTableHtml(viewerData);
+        debugJson.textContent = JSON.stringify(viewerData, null, 2);
+      } catch(e){
+        console.error(e);
+        autosaveInfo.textContent = "❌ Autosave erreur";
+        setMsg("err", "Autosave impossible: " + (e?.message || e));
+      }
+    }, 600);
+  }
+
+  // manual save
+  saveBtn.addEventListener("click", () => autosaveSchedule("manual-save"));
+
+  // ----------------------------
+  // Viewer editing events (delegated)
+  // ----------------------------
+  editHeader.addEventListener("input", (e) => {
+    const inp = e.target;
+    if(!inp.matches("[data-h]")) return;
+    const key = inp.getAttribute("data-h");
+    const v = inp.value;
+    const f = viewerData.fields || (viewerData.fields = {});
+    if(key==="total_ht" || key==="total_tva" || key==="total_ttc"){
+      f[key] = normalizeNumber(v);
+    } else if(key==="date_facture"){
+      // accept direct iso or parse if french
+      const iso = parseFrenchDateAny(v) || v.trim();
+      f[key] = iso;
+    } else {
+      f[key] = v.trim();
+    }
+    refreshTags();
+    autosaveSchedule("header");
+  });
+
+  editLines.addEventListener("input", (e) => {
+    const inp = e.target;
+    const rowEl = inp.closest("tr[data-line]");
+    if(!rowEl) return;
+    const idx = Number(rowEl.getAttribute("data-line"));
+    if(Number.isNaN(idx) || !viewerRowCache[idx]) return;
+    const k = inp.getAttribute("data-k");
+    if(!k) return;
+    viewerRowCache[idx][k] = inp.value;
+    autosaveSchedule("lines");
+  });
+
+  editLines.addEventListener("change", (e) => {
+    const sel = e.target;
+    const rowEl = sel.closest("tr[data-line]");
+    if(!rowEl) return;
+    const idx = Number(rowEl.getAttribute("data-line"));
+    if(Number.isNaN(idx) || !viewerRowCache[idx]) return;
+    const k = sel.getAttribute("data-k");
+    if(!k) return;
+    viewerRowCache[idx][k] = sel.value;
+    autosaveSchedule("lines");
+  });
+
+  editLines.addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-action]");
+    if(!b) return;
+    const action = b.getAttribute("data-action");
+    const idx = Number(b.getAttribute("data-idx"));
+    if(Number.isNaN(idx)) return;
+
+    if(action==="del-line"){
+      viewerRowCache.splice(idx, 1);
+      if(viewerRowCache.length===0) viewerRowCache.push(normalizeLineRow({}));
+      renderViewerLines();
+      initTriFromLines(); // rebuild tri from new list
+      autosaveSchedule("del-line");
+    }
+    if(action==="dup-line"){
+      const copy = JSON.parse(JSON.stringify(viewerRowCache[idx] || normalizeLineRow({})));
+      viewerRowCache.splice(idx+1, 0, copy);
+      renderViewerLines();
+      initTriFromLines();
+      autosaveSchedule("dup-line");
+    }
+  });
+
+  addLineBtn.addEventListener("click", () => {
+    viewerRowCache.push(normalizeLineRow({}));
+    renderViewerLines();
+    initTriFromLines();
+    autosaveSchedule("add-line");
+  });
+
+  // tri editing
+  triRows.addEventListener("input", (e) => {
+    const inp = e.target;
+    const rowEl = inp.closest(".triRow[data-tri]");
+    if(!rowEl) return;
+    const idx = Number(rowEl.getAttribute("data-tri"));
+    if(Number.isNaN(idx) || !triCache[idx]) return;
+    const k = inp.getAttribute("data-k");
+    if(!k) return;
+    triCache[idx][k] = inp.value;
+    computeTriSums();
+    autosaveSchedule("tri");
+  });
+
+  triRows.addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-action]");
+    if(!b) return;
+    if(b.getAttribute("data-action")==="del-tri"){
+      const idx = Number(b.getAttribute("data-idx"));
+      if(Number.isNaN(idx)) return;
+      triCache.splice(idx, 1);
+      renderTri();
+      computeTriSums();
+      autosaveSchedule("tri-del");
+    }
+  });
+
+  triNameA.addEventListener("input", () => { computeTriSums(); autosaveSchedule("tri-names"); });
+  triNameB.addEventListener("input", () => { computeTriSums(); autosaveSchedule("tri-names"); });
+  triNameC.addEventListener("input", () => { computeTriSums(); autosaveSchedule("tri-names"); });
+
+  addTriRowBtn.addEventListener("click", () => {
+    triCache.push({ label:"", cat:"A", price:"", qty:"1" });
+    renderTri();
+    computeTriSums();
+    autosaveSchedule("tri-add");
+  });
+
+  applyTriBtn.addEventListener("click", () => {
+    autoSuggestTri();
+  });
+
+  // ----------------------------
+  // Viewer open/parse pipeline
+  // ----------------------------
+  function refreshTags(){
+    const f = viewerData?.fields || {};
+    tags.innerHTML = `
+      <span class="pill"># ${escapeHtml(f.numero_facture || "")}</span>
+      <span class="pill">📅 ${escapeHtml(f.date_facture || "")}</span>
+      <span class="pill">👤 ${escapeHtml(f.client_nom || "")}</span>
+      <span class="pill">HT ${escapeHtml(f.total_ht!=null ? String(f.total_ht) : "")}</span>
+      <span class="pill">TTC ${escapeHtml(f.total_ttc!=null ? String(f.total_ttc) : "")}</span>
+    `;
+  }
+
+  async function openViewerByIndex(idx){
+    const it = state.files[idx];
+    if(!it.factureId) return;
+
+    const { data, error } = await sb.from("factures")
+      .select("id,fichier_nom,statut,texte_ocr,created_at,donnees_brutes,fichier_url")
+      .eq("id", it.factureId)
+      .single();
+    if(error){
+      setMsg("err", "Erreur lecture: " + error.message);
+      return;
+    }
+
+    viewerFactureId = data.id;
+    viewerRawText = (data.texte_ocr || "").trim();
+    viewerData = data.donnees_brutes || null;
+
+    meta.innerHTML = `
+      <span class="mono">ID ${escapeHtml(data.id)}</span> •
+      ${escapeHtml(data.fichier_nom || "")} •
+      Statut: <strong>${escapeHtml(data.statut || "")}</strong> •
+      Créé: ${escapeHtml(data.created_at || "")}
+    `;
+
+    // If donnees_brutes missing OR not enough fields OR table empty -> reparse
+    const needsFields = !viewerData?.fields || Object.keys(viewerData.fields||{}).length < 2;
+    const needsTable = !viewerData?.table || (viewerData.table?.every(p => (p?.services?.length||0)===0));
+
+    if((needsFields || needsTable) && viewerRawText.length > 30){
+      const parsed = parseFieldsRobust(viewerRawText);
+      // keep any existing if present
+      viewerData = viewerData || { lines:[], table:[], fields:{}, matches:[], version:"" };
+      viewerData.fields = { ...(viewerData.fields||{}), ...(parsed.fields||{}) };
+      viewerData.matches = [ ...(viewerData.matches||[]), ...(parsed.matches||[]) ];
+      viewerData.version = "parser_table_v265";
+      viewerData.parsed_at = new Date().toISOString();
+
+      // Ensure table exists: if empty -> fallback OCR from text
+      if(needsTable){
+        viewerData.table = [{
+          page:0, cols: defaultCols(),
+          debug: { headerFound:false, servicesDetected:0, auto:"viewer-repair" },
+          services: [],
+          debours:[]
+        }];
+        const fallbackPage = fallbackTableFromOCRText(viewerRawText);
+        viewerData.table = [ fallbackPage ];
+      }
+
+      // Save repaired data immediately
+      await sb.from("factures").update({
+        donnees_brutes: viewerData,
+        statut:"extracted",
+        numero_facture: viewerData.fields.numero_facture || null,
+        date_facture: viewerData.fields.date_facture || null,
+        client_nom: viewerData.fields.client_nom || null,
+        total_ht: normalizeNumber(viewerData.fields.total_ht) ?? null,
+        total_tva: normalizeNumber(viewerData.fields.total_tva) ?? null,
+        total_ttc: normalizeNumber(viewerData.fields.total_ttc) ?? null
+      }).eq("id", viewerFactureId);
+    }
+
+    // Render viewer content
+    refreshTags();
+    renderViewerHeader();
+    loadViewerLinesFromData();
+    renderViewerLines();
+    initTriFromLines();
+
+    tableHtml.innerHTML = renderTableHtml(viewerData);
+
+    const hl = getHighlightValues(viewerData);
+    textHtml.innerHTML = renderHighlightedText(viewerRawText, hl);
+
+    debugJson.textContent = JSON.stringify(viewerData, null, 2);
+
+    autosaveInfo.textContent = "Prêt";
+    setTab("edit");
+    openModal();
+  }
+
+  reparseBtn.addEventListener("click", async () => {
+    if(!viewerFactureId) return;
+    if(!viewerRawText || viewerRawText.length<30){
+      setMsg("warn", "Texte trop court pour re-parser.");
+      return;
+    }
+    setMsg("warn", "🔁 Re-parse en cours…");
+
+    // Force robust fields parse
+    const parsed = parseFieldsRobust(viewerRawText);
+    viewerData.fields = { ...(viewerData.fields||{}), ...(parsed.fields||{}) };
+    viewerData.matches = [ ...(viewerData.matches||[]), ...(parsed.matches||[]) ];
+    viewerData.version = "parser_table_v265";
+    viewerData.parsed_at = new Date().toISOString();
+
+    // Force fallback OCR table if current table empty
+    const empty = !viewerData.table || viewerData.table.every(p => (p?.services?.length||0)===0);
+    if(empty){
+      viewerData.table = [ fallbackTableFromOCRText(viewerRawText) ];
+    }
+
+    // Rebuild editor caches
+    refreshTags();
+    renderViewerHeader();
+    loadViewerLinesFromData();
+    renderViewerLines();
+    initTriFromLines();
+
+    tableHtml.innerHTML = renderTableHtml(viewerData);
+    const hl = getHighlightValues(viewerData);
+    textHtml.innerHTML = renderHighlightedText(viewerRawText, hl);
+    debugJson.textContent = JSON.stringify(viewerData, null, 2);
+
+    // Save
+    await sb.from("factures").update({
+      donnees_brutes: viewerData,
+      statut:"extracted",
+      numero_facture: viewerData.fields.numero_facture || null,
+      date_facture: viewerData.fields.date_facture || null,
+      client_nom: viewerData.fields.client_nom || null,
+      total_ht: normalizeNumber(viewerData.fields.total_ht) ?? null,
+      total_tva: normalizeNumber(viewerData.fields.total_tva) ?? null,
+      total_ttc: normalizeNumber(viewerData.fields.total_ttc) ?? null
+    }).eq("id", viewerFactureId);
+
+    setMsg("ok", "✅ Re-parse terminé");
+    setTimeout(()=>setMsg("", ""), 1200);
+  });
+
+  // ----------------------------
+  // Upload pipeline
+  // ----------------------------
+  async function ensureLoggedIn(){
+    const { data:{ user } } = await sb.auth.getUser();
+    if(!user) throw new Error("Non connecté");
+    return user;
+  }
+
+  async function uploadAndProcessOne(item){
+    item.status="uploading";
+    item.error=null;
+    renderList();
+
+    try{
       await ensureLoggedIn();
 
+      // upload to bucket factures
       const year = new Date().getFullYear();
       const ts = Date.now();
       const filename = `${ts}_${sanitizeFilename(item.file.name)}`;
       const path = `${year}/${filename}`;
 
-      const { data: up, error: upErr } = await sb.storage.from("factures").upload(path, item.file, {
+      const { error: upErr, data: upData } = await sb.storage.from("factures").upload(path, item.file, {
         upsert:false, cacheControl:"3600", contentType:"application/pdf"
       });
-      if (upErr) throw upErr;
-      item.uploadPath = up.path;
+      if(upErr) throw upErr;
 
-      const { data: inserted, error: dbErr } = await sb
-        .from("factures")
-        .insert({ fichier_url: up.path, fichier_nom: item.file.name, statut:"pending", format_facture:"moderne" })
-        .select("id,created_at")
-        .single();
-      if (dbErr) throw dbErr;
+      // create DB row
+      const { data: row, error: insErr } = await sb.from("factures").insert({
+        fichier_url: path,
+        fichier_nom: item.file.name,
+        statut:"pending",
+        format_facture:"auto"
+      }).select("id,created_at").single();
+      if(insErr) throw insErr;
 
-      item.factureId = inserted.id;
-      item.status = "extracting";
-      render();
+      item.factureId = row.id;
+      item.createdAt = row.created_at || new Date().toISOString();
+      item.status="extracting";
+      renderList();
 
-      await extractParseSaveAndInsert(item);
+      // signed url -> array buffer
+      const { data: signed, error: signErr } = await sb.storage.from("factures").createSignedUrl(path, 600);
+      if(signErr) throw signErr;
 
-      item.status = "extracted";
+      const res = await fetch(signed.signedUrl);
+      if(!res.ok) throw new Error("Fetch PDF impossible");
+      const arrayBuffer = await res.arrayBuffer();
 
+      // Text extraction
+      const fullText = await extractPdfTextFromArrayBuffer(arrayBuffer);
+      if(!fullText || fullText.length<30) throw new Error("Texte extrait trop court");
+
+      // Fields parse
+      const parsed = parseFieldsRobust(fullText);
+      const data = {
+        lines: [],
+        table: [],
+        fields: parsed.fields || {},
+        matches: parsed.matches || [],
+        version: "parser_table_v265",
+        parsed_at: new Date().toISOString()
+      };
+
+      // Try XY table detection (v2.2)
+      let pagesXY = [];
+      try{
+        const pages = await extractPdfItemsXY(arrayBuffer);
+        // extract table per page
+        const tablePages = [];
+        for(const pg of pages){
+          const tpg = extractTableFromXY(pg.items);
+          tablePages.push({
+            page: pg.page,
+            cols: tpg.cols,
+            debug: tpg.debug,
+            services: tpg.services,
+            debours: tpg.debours
+          });
+        }
+        data.table = tablePages;
+        pagesXY = tablePages;
+      }catch(e){
+        console.warn("XY detector error:", e);
+        data.table = [];
+      }
+
+      // If table empty -> fallback OCR
+      const emptyTable = !data.table.length || data.table.every(p => (p?.services?.length||0)===0);
+      if(emptyTable){
+        const fallback = fallbackTableFromOCRText(fullText);
+        data.table = [ fallback ];
+      }
+
+      // Save DB
+      const payload = {
+        texte_ocr: fullText,
+        donnees_brutes: data,
+        statut:"extracted",
+        numero_facture: data.fields.numero_facture || null,
+        date_facture: data.fields.date_facture || null,
+        client_nom: data.fields.client_nom || null,
+        total_ht: normalizeNumber(data.fields.total_ht) ?? null,
+        total_tva: normalizeNumber(data.fields.total_tva) ?? null,
+        total_ttc: normalizeNumber(data.fields.total_ttc) ?? null
+      };
+      const { error: updErr } = await sb.from("factures").update(payload).eq("id", item.factureId);
+      if(updErr) throw updErr;
+
+      // replace in list as saved
       state.files = state.files.map(f => {
-        if (f === item) {
-          return { kind:"saved", fileName:item.file.name, size:item.file.size, status:"extracted", factureId:item.factureId, createdAt: inserted.created_at || new Date().toISOString(), error:null };
+        if(f === item){
+          return {
+            kind:"saved",
+            fileName: item.file.name,
+            size: item.file.size,
+            status:"extracted",
+            factureId: item.factureId,
+            createdAt: item.createdAt,
+            error: null
+          };
         }
         return f;
       });
 
-      render();
-      setMsg("ok", "✅ Extraction OK. Clique 👁 Voir pour éditer / voir tableau / surlignage.");
-      setTimeout(()=>setMsg("", ""), 1200);
+      renderList();
+      setMsg("ok", "✅ Extraction OK. Clique 👁 Voir pour éditer et contrôler.");
+      setTimeout(()=>setMsg("", ""), 1500);
 
-    } catch (err) {
-      item.status = "error";
-      item.error = err?.message || String(err);
-      render();
-      if (item.factureId) await sb.from("factures").update({ statut:"error", error_message:item.error }).eq("id", item.factureId);
+    }catch(e){
+      item.status="error";
+      item.error = e?.message || String(e);
+      renderList();
+      setMsg("err", "Erreur: " + item.error);
     }
   }
 
-  // ---------------------------
+  startBtn.addEventListener("click", async () => {
+    setMsg("warn", "Extraction en cours…");
+    const items = state.files.filter(x => x.kind==="local" && x.status==="ready");
+    for(const it of items){
+      await uploadAndProcessOne(it);
+    }
+    setMsg("ok", "✅ Terminé.");
+    setTimeout(()=>setMsg("", ""), 1200);
+  });
+
+  // ----------------------------
   // Init
-  // ---------------------------
-  (async () => {
-    try {
+  // ----------------------------
+  (async function init(){
+    try{
+      // worker pdfjs
+      pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+
       sb = await waitForSupabaseClient();
 
-      if (window.pdfjsLib?.GlobalWorkerOptions) {
-        window.pdfjsLib.GlobalWorkerOptions.workerSrc =
-          "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
-      }
+      // restore list
+      restoreList();
+      renderList();
 
-      restoreListStateFromLocalStorage();
-
-      async function refreshAuthStatus() {
-        const { data: { user } } = await sb.auth.getUser();
-        sessionOk = !!user;
-
-        if (user) {
-          authStatus.textContent = "Connecté: " + (user.email || user.id);
-          logoutBtn.disabled = false;
-          emailInput.style.display = "none";
-          passInput.style.display = "none";
-          loginBtn.style.display = "none";
-        } else {
-          authStatus.textContent = "Non connecté";
-          logoutBtn.disabled = true;
-          emailInput.style.display = "";
-          passInput.style.display = "";
-          loginBtn.style.display = "";
-          setMsg("warn", "Connecte-toi pour uploader.");
-        }
-        render();
-      }
-
-      loginBtn.onclick = async () => {
-        const email = (emailInput.value || "").trim();
-        const password = passInput.value || "";
-        if (!email || !password) return setMsg("warn", "Email et mot de passe requis.");
-        setMsg("warn", "Connexion…");
-        const { error } = await sb.auth.signInWithPassword({ email, password });
-        if (error) return setMsg("err", "Erreur login: " + error.message);
-        passInput.value = "";
-        await refreshAuthStatus();
-        setMsg("ok", "✅ Connecté.");
-        setTimeout(()=>setMsg("", ""), 800);
-      };
-
-      logoutBtn.onclick = async () => { await sb.auth.signOut(); await refreshAuthStatus(); };
-      sb.auth.onAuthStateChange(async () => { await refreshAuthStatus(); });
-
-      await refreshAuthStatus();
+      // auth
+      await refreshSession();
+      sb.auth.onAuthStateChange(async () => await refreshSession());
       startKeepAlive();
 
-      startUploadBtn.onclick = async () => {
-        if (!sessionOk) return setMsg("warn", "Connecte-toi d’abord.");
-        setMsg("warn", "Extraction en cours…");
-
-        const toProcess = state.files.filter(f => f.kind === "local" && f.status === "ready");
-        for (const it of toProcess) await uploadAndProcessOne(it);
-
-        setMsg("ok", "✅ Terminé.");
-        setTimeout(()=>setMsg("", ""), 1200);
-      };
-
-      render();
-    } catch (e) {
+      if(!sessionOk){
+        setMsg("warn", "Connecte-toi pour uploader.");
+      } else {
+        setMsg("", "");
+      }
+    }catch(e){
       console.error(e);
-      setMsg("err", "Supabase non initialisé. Recharge la page.");
+      setMsg("err", "Supabase non initialisé / erreur init: " + (e?.message || e));
     }
   })();
+
+})();
 </script>
 </body>
 </html>
