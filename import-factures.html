@@ -251,8 +251,8 @@
   <div class="row" style="align-items:center;">
     <button class="btn" id="backBtn">⬅️ Retour</button>
     <div>
-      <div style="font-weight:900;">📤 Import Factures — V2.6.6 (v266)</div>
-      <div class="muted small">Table detector V2.2 + fallback OCR + édition + autosave + tri modifiable</div>
+      <div style="font-weight:900;">📤 Import Factures — V2.6.6 FULL (v266)</div>
+      <div class="muted small">V265 complet + correctif compatibilité JS (suppression de ??)</div>
     </div>
   </div>
 
@@ -269,8 +269,9 @@
   <div id="msg" class="msg warn" style="display:none;"></div>
 
   <div class="notice">
-    ✅ Si le PDF ne permet pas de détecter l’en-tête du tableau (X/Y) → <strong>fallback OCR</strong> (reconstruction depuis le texte).<br>
-    ✅ Tout est <strong>éditable</strong> avant intégration : client, dates, totaux, lignes, tri destinations (ajout/suppression).
+    ✅ Table detector X/Y V2.2 + fallback OCR<br>
+    ✅ Tout est éditable avant intégration (client, totaux, lignes, tri A/B/C)<br>
+    ✅ Autosave robuste (plus de boutons morts après quelques minutes)
   </div>
 
   <div class="card">
@@ -428,8 +429,12 @@
 <script src="./supabase-services.js"></script>
 
 <script>
-(() => {
-  const APP_VERSION = "v266";
+/* ============================
+   IMPORT FACTURES — V2.6.6 FULL
+   V265 complet + suppression totale de ?? (compat JS GitHub Pages)
+============================ */
+(function(){
+  const APP_VERSION = "v266_full";
   const LS_KEY = "import_factures_state_" + APP_VERSION;
   const MAX_FILES = 20;
   const MAX_SIZE = 10 * 1024 * 1024;
@@ -469,7 +474,6 @@
 
   const editHeader = document.getElementById("editHeader");
   const editLines = document.getElementById("editLines");
-
   const addLineBtn = document.getElementById("addLineBtn");
 
   const triNameA = document.getElementById("triNameA");
@@ -506,22 +510,33 @@
   let autosaveDirty = false;
   let lastAutosaveAt = 0;
 
+  // ----------------------------
+  // Compatibility helpers (NO ??)
+  // ----------------------------
+  function coalesce(a, b){
+    return (a === null || a === undefined) ? b : a;
+  }
+  function safeNum(v){
+    const n = normalizeNumber(v);
+    return (n === null || n === undefined || Number.isNaN(n)) ? null : n;
+  }
+
+  // ----------------------------
+  // Utilities
+  // ----------------------------
   function setMsg(type, text){
     msgBox.className = "msg " + (type || "warn");
     msgBox.textContent = text || "";
     msgBox.style.display = text ? "block" : "none";
   }
-
   function escapeHtml(s){
-    return (s||"").replace(/[&<>"']/g, c => ({
-      "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"
-    }[c]));
+    return (s||"").replace(/[&<>"']/g, function(c){
+      return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c];
+    });
   }
-
   function escapeRegExp(str){
     return String(str).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   }
-
   function formatBytes(bytes){
     const b = Number(bytes)||0;
     if(b<1024) return b+" B";
@@ -529,32 +544,21 @@
     if(kb<1024) return kb.toFixed(1)+" KB";
     return (kb/1024).toFixed(1)+" MB";
   }
-
   function isPdf(file){
     return file && (file.type==="application/pdf" || file.name.toLowerCase().endsWith(".pdf"));
   }
-
   function sanitizeFilename(name){
     return name.replace(/[^a-zA-Z0-9.\-_]/g, "_").replace(/_{2,}/g, "_");
   }
-
   function normalizeSpaces(s){
     return (s||"").replace(/\s+/g, " ").trim();
   }
-
   function normalizeNumber(str){
-    if(!str && str !== 0) return null;
+    if(str === null || str === undefined) return null;
     const n = String(str).replace(/\s/g, "").replace(",", ".");
     const val = parseFloat(n.replace(/[^0-9.]/g, ""));
     return Number.isFinite(val) ? val : null;
   }
-
-  // ✅ safe numeric return (no ?? usage)
-  function safeNum(v){
-    const n = normalizeNumber(v);
-    return (n === null || n === undefined || Number.isNaN(n)) ? null : n;
-  }
-
   function parseFrenchDateAny(dateStr){
     if(!dateStr) return null;
     const s = String(dateStr).trim();
@@ -562,7 +566,7 @@
     if(mNum){
       let d=parseInt(mNum[1],10), mo=parseInt(mNum[2],10), y=parseInt(mNum[3],10);
       if(y<100) y+=2000;
-      return `${y.toString().padStart(4,"0")}-${String(mo).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+      return y.toString().padStart(4,"0")+"-"+String(mo).padStart(2,"0")+"-"+String(d).padStart(2,"0");
     }
     const months = {
       "janvier":1,"février":2,"fevrier":2,"mars":3,"avril":4,"mai":5,"juin":6,
@@ -573,16 +577,16 @@
     if(mTxt){
       const d=parseInt(mTxt[1],10), mo=months[mTxt[2]], y=parseInt(mTxt[3],10);
       if(!mo) return null;
-      return `${y}-${String(mo).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+      return y+"-"+String(mo).padStart(2,"0")+"-"+String(d).padStart(2,"0");
     }
     return null;
   }
-
   function cleanClientName(raw){
     if(!raw) return null;
     let s = normalizeSpaces(raw);
     const stops = [" Conditions", " Détail", " Detail", " RIB", " IBAN", " BIC", " Titulaire", " Total", " TVA"];
-    for(const st of stops){
+    for(let i=0;i<stops.length;i++){
+      const st = stops[i];
       const idx = s.indexOf(st);
       if(idx>2){ s = s.slice(0, idx).trim(); break; }
     }
@@ -602,19 +606,23 @@
     return s || null;
   }
 
+  // ----------------------------
   // localStorage list persistence
+  // ----------------------------
   function saveList(){
     try{
       const compact = state.files
-        .filter(x => x.kind==="saved" || (x.kind==="local" && x.factureId))
-        .map(x => ({
-          kind:"saved",
-          fileName: x.kind==="local" ? x.file.name : x.fileName,
-          size: x.kind==="local" ? x.file.size : x.size,
-          status: x.status || "extracted",
-          factureId: x.factureId || null,
-          createdAt: x.createdAt || new Date().toISOString()
-        }));
+        .filter(function(x){ return x.kind==="saved" || (x.kind==="local" && x.factureId); })
+        .map(function(x){
+          return {
+            kind:"saved",
+            fileName: x.kind==="local" ? x.file.name : x.fileName,
+            size: x.kind==="local" ? x.file.size : x.size,
+            status: x.status || "extracted",
+            factureId: x.factureId || null,
+            createdAt: x.createdAt || new Date().toISOString()
+          };
+        });
       localStorage.setItem(LS_KEY, JSON.stringify({ savedAt: Date.now(), files: compact }));
     }catch(e){}
   }
@@ -625,28 +633,34 @@
       if(!raw) return false;
       const data = JSON.parse(raw);
       if(!data || !data.files || !data.files.length) return false;
-      state.files = data.files.map(f => ({
-        kind:"saved",
-        fileName: f.fileName || "Facture.pdf",
-        size: f.size || 0,
-        status: f.status || "extracted",
-        factureId: f.factureId || null,
-        createdAt: f.createdAt || null,
-        error: null
-      }));
+      state.files = data.files.map(function(f){
+        return {
+          kind:"saved",
+          fileName: f.fileName || "Facture.pdf",
+          size: f.size || 0,
+          status: f.status || "extracted",
+          factureId: f.factureId || null,
+          createdAt: f.createdAt || null,
+          error: null
+        };
+      });
       return true;
     }catch(e){ return false; }
   }
 
+  // ----------------------------
+  // Rendering list
+  // ----------------------------
   function renderList(){
     count.textContent = String(state.files.length);
-    const anyBusy = state.files.some(f => ["uploading","extracting"].includes(f.status));
-    startBtn.disabled = !sessionOk || anyBusy || state.files.filter(f => f.kind==="local" && f.status==="ready").length===0;
+
+    const anyBusy = state.files.some(function(f){ return ["uploading","extracting"].includes(f.status); });
+    startBtn.disabled = !sessionOk || anyBusy || state.files.filter(function(f){ return f.kind==="local" && f.status==="ready"; }).length===0;
     clearBtn.disabled = anyBusy;
 
     tbody.innerHTML = "";
     if(state.files.length===0){
-      tbody.innerHTML = `<tr><td colspan="5" class="muted">Aucun fichier</td></tr>`;
+      tbody.innerHTML = '<tr><td colspan="5" class="muted">Aucun fichier</td></tr>';
       return;
     }
 
@@ -655,10 +669,10 @@
       const fileName = it.kind==="local" ? it.file.name : it.fileName;
       const size = it.kind==="local" ? it.file.size : it.size;
 
-      let pill = `<span class="pill">${escapeHtml(it.status || "—")}</span>`;
-      if(it.status==="extracted") pill = `<span class="pill ok">OK</span>`;
-      if(it.status==="error") pill = `<span class="pill err">Erreur</span>`;
-      if(it.status==="uploading" || it.status==="extracting") pill = `<span class="pill wait">${escapeHtml(it.status)}</span>`;
+      let pill = '<span class="pill">'+escapeHtml(it.status || "—")+'</span>';
+      if(it.status==="extracted") pill = '<span class="pill ok">OK</span>';
+      if(it.status==="error") pill = '<span class="pill err">Erreur</span>';
+      if(it.status==="uploading" || it.status==="extracting") pill = '<span class="pill wait">'+escapeHtml(it.status)+'</span>';
 
       tbody.insertAdjacentHTML("beforeend", `
         <tr>
@@ -678,10 +692,11 @@
         </tr>
       `);
     }
+
     saveList();
   }
 
-  tbody.addEventListener("click", async (e) => {
+  tbody.addEventListener("click", async function(e){
     const b = e.target.closest("button[data-action]");
     if(!b) return;
     const idx = Number(b.getAttribute("data-i"));
@@ -697,62 +712,68 @@
     }
   });
 
+  // ----------------------------
   // Dropzone
+  // ----------------------------
   function addFiles(fileList){
     const incoming = Array.from(fileList || []);
-    for(const file of incoming){
+    for(let k=0;k<incoming.length;k++){
+      const file = incoming[k];
       if(state.files.length >= MAX_FILES) break;
       if(!isPdf(file)){
-        state.files.push({ kind:"local", file, status:"error", error:"PDF uniquement" });
+        state.files.push({ kind:"local", file:file, status:"error", error:"PDF uniquement" });
         continue;
       }
       if(file.size > MAX_SIZE){
-        state.files.push({ kind:"local", file, status:"error", error:"Max 10MB" });
+        state.files.push({ kind:"local", file:file, status:"error", error:"Max 10MB" });
         continue;
       }
-      state.files.push({ kind:"local", file, status:"ready", error:null, factureId:null, uploadPath:null });
+      state.files.push({ kind:"local", file:file, status:"ready", error:null, factureId:null, uploadPath:null });
     }
     renderList();
   }
 
-  fileInput.addEventListener("change", (e) => addFiles(e.target.files));
-  drop.addEventListener("dragover", (e) => { e.preventDefault(); drop.classList.add("drag"); });
-  drop.addEventListener("dragleave", () => drop.classList.remove("drag"));
-  drop.addEventListener("drop", (e) => {
+  fileInput.addEventListener("change", function(e){ addFiles(e.target.files); });
+  drop.addEventListener("dragover", function(e){ e.preventDefault(); drop.classList.add("drag"); });
+  drop.addEventListener("dragleave", function(){ drop.classList.remove("drag"); });
+  drop.addEventListener("drop", function(e){
     e.preventDefault();
     drop.classList.remove("drag");
     if(e.dataTransfer && e.dataTransfer.files) addFiles(e.dataTransfer.files);
   });
 
-  clearBtn.addEventListener("click", () => {
-    state.files = state.files.filter(x => x.kind==="saved");
+  clearBtn.addEventListener("click", function(){
+    state.files = state.files.filter(function(x){ return x.kind==="saved"; });
     renderList();
   });
 
-  reloadBtn.addEventListener("click", () => {
+  reloadBtn.addEventListener("click", function(){
     state.files = [];
     restoreList();
     renderList();
     setMsg("ok", "✅ Liste rechargée depuis localStorage");
-    setTimeout(()=>setMsg("", ""), 900);
+    setTimeout(function(){ setMsg("", ""); }, 900);
   });
 
-  backBtn.addEventListener("click", () => {
+  backBtn.addEventListener("click", function(){
     window.location.href = "index.html";
   });
 
+  // ----------------------------
   // Tabs
+  // ----------------------------
   function setTab(name){
-    tabButtons.forEach(b => b.classList.toggle("active", b.dataset.tab===name));
+    tabButtons.forEach(function(b){ b.classList.toggle("active", b.dataset.tab===name); });
     tabEdit.style.display = (name==="edit") ? "block" : "none";
     tabTable.style.display = (name==="table") ? "block" : "none";
     tabText.style.display = (name==="text") ? "block" : "none";
     tabDebug.style.display = (name==="debug") ? "block" : "none";
   }
+  tabButtons.forEach(function(b){ b.addEventListener("click", function(){ setTab(b.dataset.tab); }); });
 
-  tabButtons.forEach(b => b.addEventListener("click", () => setTab(b.dataset.tab)));
-
+  // ----------------------------
   // Modal
+  // ----------------------------
   function openModal(){ modal.classList.add("open"); }
   function closeModal(){
     modal.classList.remove("open");
@@ -766,13 +787,15 @@
     autosaveDirty = false;
   }
   closeBtn.addEventListener("click", closeModal);
-  modal.addEventListener("click", (e) => { if(e.target === modal) closeModal(); });
+  modal.addEventListener("click", function(e){ if(e.target === modal) closeModal(); });
 
+  // ----------------------------
   // Supabase init
+  // ----------------------------
   async function waitForSupabaseClient(){
     for(let i=0;i<70;i++){
       if(window.SupabaseClient) return window.SupabaseClient;
-      await new Promise(r => setTimeout(r, 100));
+      await new Promise(function(r){ setTimeout(r, 100); });
     }
     throw new Error("SupabaseClient non initialisé (timeout)");
   }
@@ -806,12 +829,12 @@
 
   function startKeepAlive(){
     clearInterval(keepAliveTimer);
-    keepAliveTimer = setInterval(async () => {
+    keepAliveTimer = setInterval(async function(){
       await refreshSession();
     }, 120000);
   }
 
-  loginBtn.addEventListener("click", async () => {
+  loginBtn.addEventListener("click", async function(){
     const em = (email.value||"").trim();
     const pw = pass.value || "";
     if(!em || !pw){
@@ -819,52 +842,58 @@
       return;
     }
     setMsg("warn", "Connexion…");
-    const { error } = await sb.auth.signInWithPassword({ email: em, password: pw });
-    if(error){
-      setMsg("err", "Erreur login: " + error.message);
+    const result = await sb.auth.signInWithPassword({ email: em, password: pw });
+    if(result.error){
+      setMsg("err", "Erreur login: " + result.error.message);
       return;
     }
     pass.value = "";
     await refreshSession();
     setMsg("ok", "✅ Connecté");
-    setTimeout(()=>setMsg("", ""), 900);
+    setTimeout(function(){ setMsg("", ""); }, 900);
   });
 
-  logoutBtn.addEventListener("click", async () => {
+  logoutBtn.addEventListener("click", async function(){
     await sb.auth.signOut();
     await refreshSession();
     setMsg("warn", "Déconnecté");
-    setTimeout(()=>setMsg("", ""), 900);
+    setTimeout(function(){ setMsg("", ""); }, 900);
   });
 
-  // PDF text extraction
+  // ----------------------------
+  // PDF extraction (texte)
+  // ----------------------------
   async function extractPdfTextFromArrayBuffer(arrayBuffer){
     const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
     let fullText = "";
     for(let p=1; p<=pdf.numPages; p++){
       const page = await pdf.getPage(p);
       const content = await page.getTextContent();
-      const text = content.items.map(it => it.str).join(" ");
-      fullText += "\\n\\n=== PAGE " + p + " ===\\n" + text;
+      const text = content.items.map(function(it){ return it.str; }).join(" ");
+      fullText += "\n\n=== PAGE " + p + " ===\n" + text;
     }
     return fullText.trim();
   }
 
-  // Robust fields parser
+  // ----------------------------
+  // Fields parser (robuste)
+  // ----------------------------
   function parseFieldsRobust(fullText){
-    const out = { fields:{}, matches:[], version:"parser_table_v266", parsed_at: new Date().toISOString() };
+    const out = { fields:{}, matches:[], version:"parser_table_v266_full", parsed_at: new Date().toISOString() };
     const t = normalizeSpaces(fullText || "");
 
-    const mFact = t.match(/\\bFacture\\s+[\"']?\\s*([A-Z]{2,6}-\\d{3,4}-\\d{2,}|FACT-\\d{4}-\\d{2,})\\s*[\"']?/i)
-                || t.match(/\\b(FACT-\\d{4}-\\d{2,})\\b/i);
+    // Numero facture
+    const mFact = t.match(/\bFacture\s+["']?\s*([A-Z]{2,6}-\d{3,4}-\d{2,}|FACT-\d{4}-\d{2,})\s*["']?/i)
+                || t.match(/\b(FACT-\d{4}-\d{2,})\b/i);
     if(mFact){
-      const val = (mFact[1] || mFact[0]).replace(/Facture/i, "").replace(/[\"']/g, "").trim();
+      const val = (mFact[1] || mFact[0]).replace(/Facture/i, "").replace(/["']/g, "").trim();
       out.fields.numero_facture = val;
       out.matches.push({ raw: mFact[0], label:"numero_facture", value: val });
     }
 
-    const mDateTxt = t.match(/\\b(\\d{1,2}\\s+(janvier|février|fevrier|mars|avril|mai|juin|juillet|août|aout|septembre|octobre|novembre|décembre|decembre)\\s+\\d{4})\\b/i);
-    const mDateNum = t.match(/\\b(\\d{1,2}[\\/\\-.]\\d{1,2}[\\/\\-.]\\d{2,4})\\b/);
+    // Date facture
+    const mDateTxt = t.match(/\b(\d{1,2}\s+(janvier|février|fevrier|mars|avril|mai|juin|juillet|août|aout|septembre|octobre|novembre|décembre|decembre)\s+\d{4})\b/i);
+    const mDateNum = t.match(/\b(\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4})\b/);
     const rawDate = mDateTxt ? mDateTxt[1] : (mDateNum ? mDateNum[1] : null);
     if(rawDate){
       const iso = parseFrenchDateAny(rawDate);
@@ -874,7 +903,8 @@
       }
     }
 
-    const mDest = t.match(/Destinataire\\s+([\\s\\S]+?)(Conditions|Détail|Detail|RIB|IBAN|BIC|Total\\s*HT|Total\\s*TTC)/i);
+    // Client destinataire
+    const mDest = t.match(/Destinataire\s+([\s\S]+?)(Conditions|Détail|Detail|RIB|IBAN|BIC|Total\s*HT|Total\s*TTC)/i);
     if(mDest){
       const rawBlock = normalizeSpaces(mDest[1] || "");
       const clean = cleanClientName(rawBlock);
@@ -884,7 +914,8 @@
       }
     }
 
-    const mTotals = t.match(/Total\\s*HT[\\s:]+([0-9\\s.,]+)\\s*€[\\s\\S]{0,80}?TVA[\\s\\S]{0,50}?([0-9\\s.,]+)\\s*€[\\s\\S]{0,80}?Total\\s*TTC[\\s:]+([0-9\\s.,]+)\\s*€/i);
+    // Totaux
+    const mTotals = t.match(/Total\s*HT[\s:]+([0-9\s.,]+)\s*€[\s\S]{0,80}?TVA[\s\S]{0,50}?([0-9\s.,]+)\s*€[\s\S]{0,80}?Total\s*TTC[\s:]+([0-9\s.,]+)\s*€/i);
     if(mTotals){
       out.fields.total_ht = safeNum(mTotals[1]);
       out.fields.total_tva = safeNum(mTotals[2]);
@@ -892,34 +923,273 @@
       out.matches.push({ raw: mTotals[0], label:"total_ht", value: mTotals[1] });
       out.matches.push({ raw: mTotals[0], label:"total_tva", value: mTotals[2] });
       out.matches.push({ raw: mTotals[0], label:"total_ttc", value: mTotals[3] });
+    } else {
+      const mHT = t.match(/Total\s*HT\s*[:\s]\s*([0-9\s.,]+)\s*€/i);
+      const mTVA = t.match(/\bTVA\b[\s\S]{0,10}?([0-9\s.,]+)\s*€/i);
+      const mTTC = t.match(/Total\s*TTC\s*[:\s]\s*([0-9\s.,]+)\s*€/i);
+      if(mHT){ out.fields.total_ht = safeNum(mHT[1]); out.matches.push({ raw: mHT[0], label:"total_ht", value:mHT[1] }); }
+      if(mTVA){ out.fields.total_tva = safeNum(mTVA[1]); out.matches.push({ raw: mTVA[0], label:"total_tva", value:mTVA[1] }); }
+      if(mTTC){ out.fields.total_ttc = safeNum(mTTC[1]); out.matches.push({ raw: mTTC[0], label:"total_ttc", value:mTTC[1] }); }
     }
+
     return out;
   }
 
-  // Fallback OCR table
+  // ----------------------------
+  // Table detector X/Y + fallback OCR
+  // (identique V265)
+  // ----------------------------
+  function defaultCols(){
+    return {
+      xType:0, xDesc:90, xPU:360, xQty:470, xTVA:540, xReduc:585, xTotal:650,
+      hasReduc:false, found:false
+    };
+  }
+
+  async function extractPdfItemsXY(arrayBuffer){
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    const pages = [];
+    for(let p=1; p<=pdf.numPages; p++){
+      const page = await pdf.getPage(p);
+      const viewport = page.getViewport({ scale: 1.0 });
+      const content = await page.getTextContent();
+      const items = content.items.map(function(it){
+        const tx = it.transform;
+        const x = tx[4];
+        const y = tx[5];
+        return { str: it.str, x: x, y: y, w: it.width || 0, h: it.height || 0 };
+      });
+      pages.push({ page:p, items:items, viewport:viewport });
+    }
+    return pages;
+  }
+
+  function groupByLine(items, yTolerance){
+    if(yTolerance === undefined) yTolerance = 2.5;
+    const sorted = items.slice().sort(function(a,b){ return (b.y - a.y) || (a.x - b.x); });
+    const lines = [];
+    for(let i=0;i<sorted.length;i++){
+      const it = sorted[i];
+      if(!it.str || !it.str.trim()) continue;
+      let line = null;
+      for(let j=0;j<lines.length;j++){
+        if(Math.abs(lines[j].y - it.y) <= yTolerance){ line = lines[j]; break; }
+      }
+      if(!line){
+        line = { y: it.y, tokens: [], text:"" };
+        lines.push(line);
+      }
+      line.tokens.push(it);
+    }
+    for(let i=0;i<lines.length;i++){
+      const l = lines[i];
+      l.tokens.sort(function(a,b){ return a.x-b.x; });
+      l.text = l.tokens.map(function(t){ return t.str; }).join(" ");
+    }
+    lines.sort(function(a,b){ return b.y-a.y; });
+    return lines;
+  }
+
+  function detectHeaderAndCols(items){
+    const lines = groupByLine(items, 2.5);
+    let header = null;
+    const keywords = ["type","description","prix","unitaire","quantité","quantite","tva","total"];
+    for(let i=0;i<lines.length;i++){
+      const line = lines[i];
+      const txt = normalizeSpaces(line.text).toLowerCase();
+      let score = 0;
+      for(let k=0;k<keywords.length;k++){
+        if(txt.includes(keywords[k])) score++;
+      }
+      if(score >= 5){ header = line; break; }
+    }
+    if(!header){
+      return { found:false, headerY:null, cols: defaultCols(), headerFound:false };
+    }
+
+    const tokens = header.tokens.slice().sort(function(a,b){ return a.x-b.x; });
+    function findTokenX(word){
+      for(let i=0;i<tokens.length;i++){
+        const t = tokens[i];
+        if(normalizeSpaces(t.str).toLowerCase().includes(word)) return t.x;
+      }
+      return null;
+    }
+
+    let xType = tokens[0] ? tokens[0].x : 0;
+    let xDesc = findTokenX("description");
+    let xPU = findTokenX("prix");
+    let xQty = findTokenX("quant");
+    let xTVA = findTokenX("tva");
+    let xTotal = findTokenX("total");
+
+    const xs = tokens.map(function(t){ return t.x; }).sort(function(a,b){ return a-b; });
+    const minX = xs[0] || 0;
+    const maxX = xs[xs.length-1] || 700;
+
+    if(xDesc===null) xDesc = minX + (maxX-minX)*0.15;
+    if(xPU===null) xPU = minX + (maxX-minX)*0.58;
+    if(xQty===null) xQty = minX + (maxX-minX)*0.70;
+    if(xTVA===null) xTVA = minX + (maxX-minX)*0.78;
+    if(xTotal===null) xTotal = minX + (maxX-minX)*0.86;
+
+    const hasReduc = normalizeSpaces(header.text).toLowerCase().includes("réduction") || normalizeSpaces(header.text).toLowerCase().includes("reduction");
+    let xReduc = null;
+    if(hasReduc){
+      xReduc = findTokenX("réduc") || findTokenX("reduc") || (minX + (maxX-minX)*0.82);
+      if(xTotal < xReduc) xTotal = xReduc + 40;
+    } else {
+      xReduc = xTVA + 40;
+    }
+
+    return {
+      found:true,
+      headerFound:true,
+      headerY: header.y,
+      cols:{
+        xType:xType, xDesc:xDesc, xPU:xPU, xQty:xQty, xTVA:xTVA, xReduc:xReduc, xTotal:xTotal,
+        hasReduc:hasReduc, found:true
+      }
+    };
+  }
+
+  function getCellsFromLine(tokens, cols){
+    const typeTokens=[], descTokens=[], puTokens=[], qtyTokens=[], tvaTokens=[], reducTokens=[], totalTokens=[];
+    for(let i=0;i<tokens.length;i++){
+      const t = tokens[i];
+      const x = t.x;
+      const s = t.str;
+      if(x < cols.xDesc) typeTokens.push(s);
+      else if(x < cols.xPU) descTokens.push(s);
+      else if(x < cols.xQty) puTokens.push(s);
+      else if(x < cols.xTVA) qtyTokens.push(s);
+      else if(cols.hasReduc && x < cols.xReduc) tvaTokens.push(s);
+      else if(cols.hasReduc && x < cols.xTotal) reducTokens.push(s);
+      else if(!cols.hasReduc && x < cols.xTotal) tvaTokens.push(s);
+      else totalTokens.push(s);
+    }
+    return {
+      type: typeTokens.join(" "),
+      desc: descTokens.join(" "),
+      pu: puTokens.join(" "),
+      qty: qtyTokens.join(" "),
+      tva: tvaTokens.join(" "),
+      reduc: reducTokens.join(" "),
+      total: totalTokens.join(" ")
+    };
+  }
+
+  function isMoneyToken(s){
+    return /[0-9][0-9\s]*[,\.]\d{2}\s*€?/.test(s);
+  }
+
+  function extractTableFromXY(pageItems){
+    const head = detectHeaderAndCols(pageItems);
+    const cols = head.cols || defaultCols();
+    const headerY = head.headerY;
+
+    const lines = groupByLine(pageItems, 2.5);
+    const tableLines = [];
+    let inTable = false;
+
+    for(let i=0;i<lines.length;i++){
+      const l = lines[i];
+      if(headerY!==null && headerY!==undefined && l.y <= headerY + 1){
+        inTable = true;
+      }
+      if(!inTable) continue;
+
+      const txt = normalizeSpaces(l.text).toLowerCase();
+      if(txt.includes("total ht") && txt.includes("total ttc")) break;
+      if(txt.includes("sas au capital") || txt.includes("sarl au capital")) break;
+      if(txt.includes("page") && txt.includes("sur")) continue;
+
+      tableLines.push(l);
+    }
+
+    const rows = [];
+    let current = null;
+
+    function flush(){
+      if(current){
+        rows.push(current);
+        current = null;
+      }
+    }
+
+    for(let i=0;i<tableLines.length;i++){
+      const l = tableLines[i];
+      const cell = getCellsFromLine(l.tokens, cols);
+      const type = normalizeSpaces(cell.type).toLowerCase();
+      const hasType = type.includes("service") || type.includes("debours") || type.includes("débours") || type.includes("frais") || type.includes("prest");
+      const hasMoney = isMoneyToken(cell.pu) || isMoneyToken(cell.total);
+
+      if(hasType && hasMoney){
+        flush();
+        current = { type: cell.type, desc: cell.desc, pu: cell.pu, qty: cell.qty, tva: cell.tva, reduc: cell.reduc, total: cell.total };
+      } else {
+        if(current){
+          const extra = normalizeSpaces(l.text);
+          if(extra && extra.length>1){
+            const extraClean = extra.replace(/[0-9][0-9\s]*[,\.]\d{2}\s*€?/g, "").replace(/\s+/g, " ").trim();
+            if(extraClean) current.desc = normalizeSpaces((current.desc||"") + " " + extraClean);
+          }
+        }
+      }
+    }
+    flush();
+
+    const services = rows.map(function(r){
+      return {
+        type: normalizeSpaces(r.type) || "Service",
+        desc: normalizeSpaces(r.desc),
+        pu: normalizeSpaces(r.pu),
+        qty: normalizeSpaces(r.qty),
+        tva: normalizeSpaces(r.tva),
+        reduc: normalizeSpaces(r.reduc),
+        total: normalizeSpaces(r.total)
+      };
+    }).filter(function(r){ return r.desc || r.total || r.pu; });
+
+    return {
+      cols: cols,
+      debug: {
+        headerFound: head.headerFound,
+        headerY: (headerY!==null && headerY!==undefined) ? headerY : null,
+        hasReduc: cols.hasReduc,
+        tableLines: tableLines.length,
+        servicesDetected: services.length,
+        totalLines: lines.length
+      },
+      services: services,
+      debours: []
+    };
+  }
+
+  // fallback OCR (identique v265)
   function fallbackTableFromOCRText(fullText){
     const t = normalizeSpaces(fullText || "");
     const services = [];
-    const chunks = t.split(/\\bService\\b/i);
-
+    const chunks = t.split(/\bService\b/i);
     if(chunks.length > 1){
-      for(const rawChunk of chunks.slice(1)){
+      for(let i=1;i<chunks.length;i++){
+        const rawChunk = chunks[i];
         const c = normalizeSpaces(rawChunk);
-        const moneyRe = /([0-9][0-9\\s]*[,\\.]\\d{2})\\s*€/g;
-        const moneys = Array.from(c.matchAll(moneyRe)).map(m => (m[1]+" €").replace(/\\s+/g, " ").trim());
+        const moneyRe = /([0-9][0-9\s]*[,\.]\d{2})\s*€/g;
+        const moneys = Array.from(c.matchAll(moneyRe)).map(function(m){ return (m[1]+" €").replace(/\s+/g, " ").trim(); });
         if(moneys.length < 2) continue;
 
         const total = moneys[moneys.length-1];
         const pu = moneys[0];
 
-        const mTVA = c.match(/\\b(\\d{1,3})\\s*%\\b/);
+        const mTVA = c.match(/\b(\d{1,3})\s*%\b/);
         const tva = mTVA ? (mTVA[1]+"%") : "10%";
 
         let qty = "1";
         const idx = c.indexOf(pu.replace(" €",""));
         if(idx >= 0){
           const after = c.slice(idx);
-          const mQty = after.match(/\\b(\\d{1,3})\\b/);
+          const mQty = after.match(/\b(\d{1,3})\b/);
           if(mQty) qty = mQty[1];
         }
 
@@ -928,37 +1198,49 @@
         if(cut>0) desc = c.slice(0, cut).trim();
         desc = normalizeSpaces(desc);
 
-        services.push({ type:"Service", desc, pu, qty, tva, reduc:"", total });
+        services.push({ type:"Service", desc:desc, pu:pu, qty:qty, tva:tva, reduc:"", total:total });
       }
     }
 
     return {
-      cols: { xType:0, xDesc:90, xPU:360, xQty:470, xTVA:540, xReduc:585, xTotal:650, hasReduc:false, found:false },
-      debug:{ headerFound:false, headerY:null, hasReduc:false, tableLines:0, servicesDetected: services.length, totalLines:0, fallback:true },
+      cols: defaultCols(),
+      debug:{
+        headerFound:false,
+        headerY:null,
+        hasReduc:false,
+        tableLines: 0,
+        servicesDetected: services.length,
+        totalLines: 0,
+        fallback:true
+      },
       services: services,
       debours:[]
     };
   }
 
-  // Highlight
+  // ----------------------------
+  // Highlight helpers
+  // ----------------------------
   function getHighlightValues(data){
     const set = new Set();
-    const matches = data && data.matches ? data.matches : [];
-    for(const m of matches){
+    const matches = (data && data.matches) ? data.matches : [];
+    for(let i=0;i<matches.length;i++){
+      const m = matches[i];
       const v = (m.value || "").toString().trim();
       if(v.length>=3 && v.length<=220) set.add(v);
     }
-    const f = data && data.fields ? data.fields : {};
-    ["numero_facture","date_facture","client_nom"].forEach(k => {
+    const f = (data && data.fields) ? data.fields : {};
+    ["numero_facture","date_facture","client_nom"].forEach(function(k){
       const v = (f[k]||"").toString().trim();
       if(v.length>=3 && v.length<=220) set.add(v);
     });
-    return Array.from(set).sort((a,b)=>b.length-a.length);
+    return Array.from(set).sort(function(a,b){ return b.length-a.length; });
   }
 
   function renderHighlightedText(rawText, values){
     let html = escapeHtml(rawText || "");
-    for(const v of values){
+    for(let i=0;i<values.length;i++){
+      const v = values[i];
       const re = new RegExp(escapeRegExp(escapeHtml(v)), "g");
       html = html.replace(re, '<mark class="hl">'+escapeHtml(v)+'</mark>');
     }
@@ -966,44 +1248,449 @@
   }
 
   function renderTableHtml(data){
-    const pages = data && data.table ? data.table : [];
+    const pages = (data && data.table) ? data.table : [];
     const rows = [];
-    for(const p of pages){
+    for(let i=0;i<pages.length;i++){
+      const p = pages[i];
       if(p && p.services && p.services.length) rows.push.apply(rows, p.services);
     }
     if(rows.length===0){
       return '<div class="muted">Aucun tableau détecté (même fallback). Vérifie le texte extrait.</div>';
     }
-    const hasReduc = rows.some(r => (r.reduc||"").trim().length>0);
+    const hasReduc = rows.some(function(r){ return (r.reduc||"").trim().length>0; });
+
     return `
       <table class="editTable">
         <thead>
           <tr>
-            <th>Type</th><th>Description</th><th>PU HT</th><th>Qté</th><th>TVA</th>
+            <th>Type</th>
+            <th>Description</th>
+            <th>PU HT</th>
+            <th>Qté</th>
+            <th>TVA</th>
             ${hasReduc ? "<th>Réduc</th>" : ""}
             <th>Total HT</th>
           </tr>
         </thead>
         <tbody>
-          ${rows.map(r => `
-            <tr>
-              <td>${escapeHtml(r.type || "Service")}</td>
-              <td>${escapeHtml(r.desc || "")}</td>
-              <td>${escapeHtml(r.pu || "")}</td>
-              <td>${escapeHtml(r.qty || "")}</td>
-              <td>${escapeHtml(r.tva || "")}</td>
-              ${hasReduc ? `<td>${escapeHtml(r.reduc || "")}</td>` : ""}
-              <td>${escapeHtml(r.total || "")}</td>
-            </tr>
-          `).join("")}
+          ${rows.map(function(r){
+            return `
+              <tr>
+                <td>${escapeHtml(r.type || "Service")}</td>
+                <td>${escapeHtml(r.desc || "")}</td>
+                <td>${escapeHtml(r.pu || "")}</td>
+                <td>${escapeHtml(r.qty || "")}</td>
+                <td>${escapeHtml(r.tva || "")}</td>
+                ${hasReduc ? `<td>${escapeHtml(r.reduc || "")}</td>` : ""}
+                <td>${escapeHtml(r.total || "")}</td>
+              </tr>
+            `;
+          }).join("")}
         </tbody>
       </table>
     `;
   }
 
-  // Viewer utilities
+  // ----------------------------
+  // Editor (identique V265)
+  // ----------------------------
+  function renderViewerHeader(){
+    const f = viewerData.fields || (viewerData.fields = {});
+    editHeader.innerHTML = `
+      <div>
+        <div class="label">Numéro facture</div>
+        <input data-h="numero_facture" value="${escapeHtml(f.numero_facture || "")}">
+      </div>
+      <div>
+        <div class="label">Date facture (YYYY-MM-DD)</div>
+        <input data-h="date_facture" value="${escapeHtml(f.date_facture || "")}">
+      </div>
+      <div class="full">
+        <div class="label">Client (nom seul)</div>
+        <input data-h="client_nom" value="${escapeHtml(f.client_nom || "")}">
+      </div>
+      <div>
+        <div class="label">Total HT</div>
+        <input data-h="total_ht" value="${escapeHtml(f.total_ht!=null ? String(f.total_ht) : "")}">
+      </div>
+      <div>
+        <div class="label">Total TVA</div>
+        <input data-h="total_tva" value="${escapeHtml(f.total_tva!=null ? String(f.total_tva) : "")}">
+      </div>
+      <div>
+        <div class="label">Total TTC</div>
+        <input data-h="total_ttc" value="${escapeHtml(f.total_ttc!=null ? String(f.total_ttc) : "")}">
+      </div>
+    `;
+  }
+
+  function normalizeLineRow(r){
+    return {
+      type: r.type || "Service",
+      desc: r.desc || "",
+      pu: r.pu || "",
+      qty: r.qty || "1",
+      tva: r.tva || "10%",
+      reduc: r.reduc || "",
+      total: r.total || ""
+    };
+  }
+
+  function loadViewerLinesFromData(){
+    const rows = [];
+    const pages = viewerData.table || [];
+    for(let i=0;i<pages.length;i++){
+      const p = pages[i];
+      if(p && p.services && p.services.length) rows.push.apply(rows, p.services);
+    }
+    viewerRowCache = rows.map(normalizeLineRow);
+    if(viewerRowCache.length===0){
+      viewerRowCache = [normalizeLineRow({})];
+    }
+  }
+
+  function renderViewerLines(){
+    const hasReduc = viewerRowCache.some(function(r){ return (r.reduc||"").trim().length>0; });
+    const reducTh = hasReduc ? "<th>Réduc</th>" : "";
+
+    editLines.innerHTML = `
+      <table class="editTable">
+        <thead>
+          <tr>
+            <th>Type</th>
+            <th>Description</th>
+            <th>PU</th>
+            <th>Qté</th>
+            <th>TVA</th>
+            ${reducTh}
+            <th>Total</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${viewerRowCache.map(function(r, idx){
+            return `
+              <tr data-line="${idx}">
+                <td>
+                  <select data-k="type">
+                    <option ${r.type==="Service"?"selected":""}>Service</option>
+                    <option ${String(r.type||"").toLowerCase().includes("débours")?"selected":""}>Débours</option>
+                  </select>
+                </td>
+                <td><input data-k="desc" value="${escapeHtml(r.desc)}"></td>
+                <td><input data-k="pu" value="${escapeHtml(r.pu)}"></td>
+                <td><input data-k="qty" value="${escapeHtml(r.qty)}"></td>
+                <td><input data-k="tva" value="${escapeHtml(r.tva)}"></td>
+                ${hasReduc ? `<td><input data-k="reduc" value="${escapeHtml(r.reduc)}"></td>` : ""}
+                <td><input data-k="total" value="${escapeHtml(r.total)}"></td>
+                <td>
+                  <div class="actions">
+                    <button class="btn small" data-action="dup-line" data-idx="${idx}">Dupliquer</button>
+                    <button class="btn small" data-action="del-line" data-idx="${idx}">Supprimer</button>
+                  </div>
+                </td>
+              </tr>
+            `;
+          }).join("")}
+        </tbody>
+      </table>
+      <div class="muted small" style="margin-top:8px;">
+        ✅ Tu peux modifier chaque cellule. Les changements sont autosave (toutes les 600ms).
+      </div>
+    `;
+  }
+
+  function updateViewerDataTableFromCache(){
+    viewerData.table = [{
+      page: 0,
+      cols: defaultCols(),
+      debug: { headerFound: true, servicesDetected: viewerRowCache.length, rebuiltFromEditor:true },
+      services: viewerRowCache.map(function(r){
+        return {
+          type: r.type || "Service",
+          desc: normalizeSpaces(r.desc),
+          pu: normalizeSpaces(r.pu),
+          qty: normalizeSpaces(r.qty),
+          tva: normalizeSpaces(r.tva),
+          reduc: normalizeSpaces(r.reduc),
+          total: normalizeSpaces(r.total)
+        };
+      }),
+      debours:[]
+    }];
+  }
+
+  // ----------------------------
+  // Tri destinations (identique V265, MAIS FIX qty calc sans ?? / ||)
+  // ----------------------------
+  function initTriFromLines(){
+    const tri = viewerData.tri || null;
+    if(tri){
+      triNameA.value = tri.nameA || "A";
+      triNameB.value = tri.nameB || "B";
+      triNameC.value = tri.nameC || "C";
+      triCache = (tri.rows || []).map(function(r){
+        return {
+          label: r.label || "",
+          cat: r.cat || "A",
+          price: r.price || "",
+          qty: r.qty || "1"
+        };
+      });
+    } else {
+      triNameA.value = "Excursions";
+      triNameB.value = "Navettes";
+      triNameC.value = "Débours";
+      triCache = viewerRowCache.map(function(r){
+        return {
+          label: r.desc || "",
+          cat: "A",
+          price: r.total || r.pu || "",
+          qty: r.qty || "1"
+        };
+      });
+    }
+    renderTri();
+    computeTriSums();
+  }
+
+  function renderTri(){
+    triRows.innerHTML = triCache.map(function(r, idx){
+      return `
+        <div class="triRow" data-tri="${idx}">
+          <input data-k="label" value="${escapeHtml(r.label)}" placeholder="Libellé...">
+          <input data-k="cat" value="${escapeHtml(r.cat)}" placeholder="A/B/C">
+          <input data-k="price" value="${escapeHtml(r.price)}" placeholder="Prix HT">
+          <input data-k="qty" value="${escapeHtml(r.qty)}" placeholder="Qté">
+          <button class="btn small" data-action="del-tri" data-idx="${idx}">Supprimer</button>
+        </div>
+      `;
+    }).join("");
+  }
+
+  function computeTriSums(){
+    let a=0,b=0,c=0;
+    for(let i=0;i<triCache.length;i++){
+      const r = triCache[i];
+      const cat = (r.cat||"A").trim().toUpperCase();
+
+      // ✅ FIX : plus de "?? ... || ..." (ça cassait le JS)
+      let qtyN = safeNum(r.qty);
+      if(qtyN === null){
+        const p = parseInt(String(r.qty||"1").trim(),10);
+        qtyN = Number.isFinite(p) ? p : 1;
+      }
+      let priceN = safeNum(r.price);
+      if(priceN === null) priceN = 0;
+
+      const val = priceN * qtyN;
+      if(cat==="A") a += val;
+      else if(cat==="B") b += val;
+      else c += val;
+    }
+    sumA.textContent = (triNameA.value || "A") + ": " + a.toFixed(2) + "€";
+    sumB.textContent = (triNameB.value || "B") + ": " + b.toFixed(2) + "€";
+    sumC.textContent = (triNameC.value || "C") + ": " + c.toFixed(2) + "€";
+    sumAll.textContent = "Total: " + (a+b+c).toFixed(2) + "€";
+  }
+
+  function saveTriToViewerData(){
+    viewerData.tri = {
+      nameA: triNameA.value || "A",
+      nameB: triNameB.value || "B",
+      nameC: triNameC.value || "C",
+      rows: triCache.map(function(r){
+        return { label:r.label, cat:r.cat, price:r.price, qty:r.qty };
+      })
+    };
+  }
+
+  function autoSuggestTri(){
+    const kwC = ["péage","peage","parking","repas","hôtel","hotel","billet","entrée","entree","taxi","avion","train","frais"];
+    const kwB = ["navette","transfert","aéroport","aeroport","gare","retour","arrivée","arrivee"];
+    for(let i=0;i<triCache.length;i++){
+      const r = triCache[i];
+      const s = (r.label||"").toLowerCase();
+      if(kwC.some(function(k){ return s.includes(k); })) r.cat = "C";
+      else if(kwB.some(function(k){ return s.includes(k); })) r.cat = "B";
+      else r.cat = "A";
+    }
+    renderTri();
+    computeTriSums();
+    autosaveSchedule("tri-suggest");
+  }
+
+  // ----------------------------
+  // Autosave (identique V265, mais sans ??)
+  // ----------------------------
+  function autosaveSchedule(reason){
+    if(reason === undefined) reason = "change";
+    autosaveDirty = true;
+    autosaveInfo.textContent = "✍️ Modifications…";
+    clearTimeout(autosaveTimer);
+    autosaveTimer = setTimeout(async function(){
+      if(!viewerFactureId || !viewerData || !sessionOk) return;
+
+      updateViewerDataTableFromCache();
+      saveTriToViewerData();
+
+      try{
+        const f = viewerData.fields || {};
+        const totalHT = (typeof f.total_ht==="number") ? f.total_ht : safeNum(f.total_ht);
+        const totalTVA = (typeof f.total_tva==="number") ? f.total_tva : safeNum(f.total_tva);
+        const totalTTC = (typeof f.total_ttc==="number") ? f.total_ttc : safeNum(f.total_ttc);
+
+        const payload = {
+          donnees_brutes: viewerData,
+          numero_facture: f.numero_facture || null,
+          date_facture: f.date_facture || null,
+          client_nom: f.client_nom || null,
+          total_ht: totalHT,
+          total_tva: totalTVA,
+          total_ttc: totalTTC,
+          statut: "extracted"
+        };
+        const upd = await sb.from("factures").update(payload).eq("id", viewerFactureId);
+        if(upd.error) throw upd.error;
+
+        autosaveDirty = false;
+        lastAutosaveAt = Date.now();
+        autosaveInfo.textContent = "✅ Autosave (" + reason + ")";
+        setTimeout(function(){
+          if(!autosaveDirty) autosaveInfo.textContent = "Dernière sauvegarde: " + new Date(lastAutosaveAt).toLocaleTimeString();
+        }, 1000);
+
+        tableHtml.innerHTML = renderTableHtml(viewerData);
+        debugJson.textContent = JSON.stringify(viewerData, null, 2);
+      } catch(e){
+        console.error(e);
+        autosaveInfo.textContent = "❌ Autosave erreur";
+        setMsg("err", "Autosave impossible: " + (e && e.message ? e.message : e));
+      }
+    }, 600);
+  }
+
+  saveBtn.addEventListener("click", function(){ autosaveSchedule("manual-save"); });
+
+  // ----------------------------
+  // Viewer editing events (delegated)
+  // ----------------------------
+  editHeader.addEventListener("input", function(e){
+    const inp = e.target;
+    if(!inp.matches("[data-h]")) return;
+    const key = inp.getAttribute("data-h");
+    const v = inp.value;
+    const f = viewerData.fields || (viewerData.fields = {});
+    if(key==="total_ht" || key==="total_tva" || key==="total_ttc"){
+      f[key] = safeNum(v);
+    } else if(key==="date_facture"){
+      const iso = parseFrenchDateAny(v) || v.trim();
+      f[key] = iso;
+    } else {
+      f[key] = v.trim();
+    }
+    refreshTags();
+    autosaveSchedule("header");
+  });
+
+  editLines.addEventListener("input", function(e){
+    const inp = e.target;
+    const rowEl = inp.closest("tr[data-line]");
+    if(!rowEl) return;
+    const idx = Number(rowEl.getAttribute("data-line"));
+    if(Number.isNaN(idx) || !viewerRowCache[idx]) return;
+    const k = inp.getAttribute("data-k");
+    if(!k) return;
+    viewerRowCache[idx][k] = inp.value;
+    autosaveSchedule("lines");
+  });
+
+  editLines.addEventListener("change", function(e){
+    const sel = e.target;
+    const rowEl = sel.closest("tr[data-line]");
+    if(!rowEl) return;
+    const idx = Number(rowEl.getAttribute("data-line"));
+    if(Number.isNaN(idx) || !viewerRowCache[idx]) return;
+    const k = sel.getAttribute("data-k");
+    if(!k) return;
+    viewerRowCache[idx][k] = sel.value;
+    autosaveSchedule("lines");
+  });
+
+  editLines.addEventListener("click", function(e){
+    const b = e.target.closest("button[data-action]");
+    if(!b) return;
+    const action = b.getAttribute("data-action");
+    const idx = Number(b.getAttribute("data-idx"));
+    if(Number.isNaN(idx)) return;
+
+    if(action==="del-line"){
+      viewerRowCache.splice(idx, 1);
+      if(viewerRowCache.length===0) viewerRowCache.push(normalizeLineRow({}));
+      renderViewerLines();
+      initTriFromLines();
+      autosaveSchedule("del-line");
+    }
+    if(action==="dup-line"){
+      const copy = JSON.parse(JSON.stringify(viewerRowCache[idx] || normalizeLineRow({})));
+      viewerRowCache.splice(idx+1, 0, copy);
+      renderViewerLines();
+      initTriFromLines();
+      autosaveSchedule("dup-line");
+    }
+  });
+
+  addLineBtn.addEventListener("click", function(){
+    viewerRowCache.push(normalizeLineRow({}));
+    renderViewerLines();
+    initTriFromLines();
+    autosaveSchedule("add-line");
+  });
+
+  triRows.addEventListener("input", function(e){
+    const inp = e.target;
+    const rowEl = inp.closest(".triRow[data-tri]");
+    if(!rowEl) return;
+    const idx = Number(rowEl.getAttribute("data-tri"));
+    if(Number.isNaN(idx) || !triCache[idx]) return;
+    const k = inp.getAttribute("data-k");
+    if(!k) return;
+    triCache[idx][k] = inp.value;
+    computeTriSums();
+    autosaveSchedule("tri");
+  });
+
+  triRows.addEventListener("click", function(e){
+    const b = e.target.closest("button[data-action]");
+    if(!b) return;
+    if(b.getAttribute("data-action")==="del-tri"){
+      const idx = Number(b.getAttribute("data-idx"));
+      if(Number.isNaN(idx)) return;
+      triCache.splice(idx, 1);
+      renderTri();
+      computeTriSums();
+      autosaveSchedule("tri-del");
+    }
+  });
+
+  triNameA.addEventListener("input", function(){ computeTriSums(); autosaveSchedule("tri-names"); });
+  triNameB.addEventListener("input", function(){ computeTriSums(); autosaveSchedule("tri-names"); });
+  triNameC.addEventListener("input", function(){ computeTriSums(); autosaveSchedule("tri-names"); });
+
+  addTriRowBtn.addEventListener("click", function(){
+    triCache.push({ label:"", cat:"A", price:"", qty:"1" });
+    renderTri();
+    computeTriSums();
+    autosaveSchedule("tri-add");
+  });
+
+  applyTriBtn.addEventListener("click", function(){ autoSuggestTri(); });
+
+  // ----------------------------
+  // Viewer open/parse pipeline
+  // ----------------------------
   function refreshTags(){
-    const f = viewerData && viewerData.fields ? viewerData.fields : {};
+    const f = viewerData.fields || {};
     tags.innerHTML = `
       <span class="pill"># ${escapeHtml(f.numero_facture || "")}</span>
       <span class="pill">📅 ${escapeHtml(f.date_facture || "")}</span>
@@ -1013,39 +1700,24 @@
     `;
   }
 
-  // Minimal editor render (kept consistent)
-  function renderViewerHeader(){
-    const f = viewerData && viewerData.fields ? viewerData.fields : (viewerData.fields = {});
-    editHeader.innerHTML = `
-      <div><div class="label">Numéro facture</div><input data-h="numero_facture" value="${escapeHtml(f.numero_facture || "")}"></div>
-      <div><div class="label">Date facture (YYYY-MM-DD)</div><input data-h="date_facture" value="${escapeHtml(f.date_facture || "")}"></div>
-      <div class="full"><div class="label">Client (nom seul)</div><input data-h="client_nom" value="${escapeHtml(f.client_nom || "")}"></div>
-      <div><div class="label">Total HT</div><input data-h="total_ht" value="${escapeHtml(f.total_ht!=null ? String(f.total_ht) : "")}"></div>
-      <div><div class="label">Total TVA</div><input data-h="total_tva" value="${escapeHtml(f.total_tva!=null ? String(f.total_tva) : "")}"></div>
-      <div><div class="label">Total TTC</div><input data-h="total_ttc" value="${escapeHtml(f.total_ttc!=null ? String(f.total_ttc) : "")}"></div>
-    `;
-  }
-
-  // NOTE: For brevity and stability, in v266 we keep the same editor logic as v265,
-  // but the critical change is: NO "??" anywhere, so the JS runs and login works.
-
   async function openViewerByIndex(idx){
     const it = state.files[idx];
     if(!it || !it.factureId) return;
 
-    const { data, error } = await sb.from("factures")
-      .select("id,fichier_nom,statut,texte_ocr,created_at,donnees_brutes")
+    const res = await sb.from("factures")
+      .select("id,fichier_nom,statut,texte_ocr,created_at,donnees_brutes,fichier_url")
       .eq("id", it.factureId)
       .single();
 
-    if(error){
-      setMsg("err", "Erreur lecture: " + error.message);
+    if(res.error){
+      setMsg("err", "Erreur lecture: " + res.error.message);
       return;
     }
 
+    const data = res.data;
     viewerFactureId = data.id;
     viewerRawText = (data.texte_ocr || "").trim();
-    viewerData = data.donnees_brutes || { fields:{}, matches:[], table:[] };
+    viewerData = data.donnees_brutes || { lines:[], table:[], fields:{}, matches:[], version:"" };
 
     meta.innerHTML = `
       <span class="mono">ID ${escapeHtml(data.id)}</span> •
@@ -1054,14 +1726,14 @@
       Créé: ${escapeHtml(data.created_at || "")}
     `;
 
-    const needsFields = !viewerData.fields || Object.keys(viewerData.fields).length < 2;
-    const needsTable = !viewerData.table || viewerData.table.every(p => !p.services || p.services.length===0);
+    const needsFields = !viewerData.fields || Object.keys(viewerData.fields||{}).length < 2;
+    const needsTable = !viewerData.table || viewerData.table.every(function(p){ return !p || !p.services || p.services.length===0; });
 
     if((needsFields || needsTable) && viewerRawText.length > 30){
       const parsed = parseFieldsRobust(viewerRawText);
       viewerData.fields = Object.assign({}, viewerData.fields || {}, parsed.fields || {});
       viewerData.matches = (viewerData.matches || []).concat(parsed.matches || []);
-      viewerData.version = "parser_table_v266";
+      viewerData.version = "parser_table_v266_full";
       viewerData.parsed_at = new Date().toISOString();
 
       if(needsTable){
@@ -1082,10 +1754,15 @@
 
     refreshTags();
     renderViewerHeader();
+    loadViewerLinesFromData();
+    renderViewerLines();
+    initTriFromLines();
+
     tableHtml.innerHTML = renderTableHtml(viewerData);
 
     const hl = getHighlightValues(viewerData);
     textHtml.innerHTML = renderHighlightedText(viewerRawText, hl);
+
     debugJson.textContent = JSON.stringify(viewerData, null, 2);
 
     autosaveInfo.textContent = "Prêt";
@@ -1093,7 +1770,7 @@
     openModal();
   }
 
-  reparseBtn.addEventListener("click", async () => {
+  reparseBtn.addEventListener("click", async function(){
     if(!viewerFactureId) return;
     if(!viewerRawText || viewerRawText.length<30){
       setMsg("warn", "Texte trop court pour re-parser.");
@@ -1104,16 +1781,20 @@
     const parsed = parseFieldsRobust(viewerRawText);
     viewerData.fields = Object.assign({}, viewerData.fields || {}, parsed.fields || {});
     viewerData.matches = (viewerData.matches || []).concat(parsed.matches || []);
-    viewerData.version = "parser_table_v266";
+    viewerData.version = "parser_table_v266_full";
     viewerData.parsed_at = new Date().toISOString();
 
-    const empty = !viewerData.table || viewerData.table.every(p => !p.services || p.services.length===0);
+    const empty = !viewerData.table || viewerData.table.every(function(p){ return !p || !p.services || p.services.length===0; });
     if(empty){
       viewerData.table = [ fallbackTableFromOCRText(viewerRawText) ];
     }
 
     refreshTags();
     renderViewerHeader();
+    loadViewerLinesFromData();
+    renderViewerLines();
+    initTriFromLines();
+
     tableHtml.innerHTML = renderTableHtml(viewerData);
     const hl = getHighlightValues(viewerData);
     textHtml.innerHTML = renderHighlightedText(viewerRawText, hl);
@@ -1131,10 +1812,12 @@
     }).eq("id", viewerFactureId);
 
     setMsg("ok", "✅ Re-parse terminé");
-    setTimeout(()=>setMsg("", ""), 1200);
+    setTimeout(function(){ setMsg("", ""); }, 1200);
   });
 
-  // Upload pipeline
+  // ----------------------------
+  // Upload pipeline (identique v265)
+  // ----------------------------
   async function ensureLoggedIn(){
     const res = await sb.auth.getUser();
     const user = res && res.data ? res.data.user : null;
@@ -1142,128 +1825,162 @@
     return user;
   }
 
-  startBtn.addEventListener("click", async () => {
-    setMsg("warn", "Extraction en cours…");
-    const items = state.files.filter(x => x.kind==="local" && x.status==="ready");
-    for(const it of items){
-      it.status="uploading";
-      it.error=null;
+  async function uploadAndProcessOne(item){
+    item.status="uploading";
+    item.error=null;
+    renderList();
+
+    try{
+      await ensureLoggedIn();
+
+      const year = new Date().getFullYear();
+      const ts = Date.now();
+      const filename = ts + "_" + sanitizeFilename(item.file.name);
+      const path = year + "/" + filename;
+
+      const up = await sb.storage.from("factures").upload(path, item.file, {
+        upsert:false, cacheControl:"3600", contentType:"application/pdf"
+      });
+      if(up.error) throw up.error;
+
+      const ins = await sb.from("factures").insert({
+        fichier_url: path,
+        fichier_nom: item.file.name,
+        statut:"pending",
+        format_facture:"auto"
+      }).select("id,created_at").single();
+      if(ins.error) throw ins.error;
+
+      item.factureId = ins.data.id;
+      item.createdAt = ins.data.created_at || new Date().toISOString();
+      item.status="extracting";
       renderList();
 
+      const signed = await sb.storage.from("factures").createSignedUrl(path, 600);
+      if(signed.error) throw signed.error;
+
+      const res = await fetch(signed.data.signedUrl);
+      if(!res.ok) throw new Error("Fetch PDF impossible");
+      const arrayBuffer = await res.arrayBuffer();
+
+      const fullText = await extractPdfTextFromArrayBuffer(arrayBuffer);
+      if(!fullText || fullText.length<30) throw new Error("Texte extrait trop court");
+
+      const parsed = parseFieldsRobust(fullText);
+      const data = {
+        lines: [],
+        table: [],
+        fields: parsed.fields || {},
+        matches: parsed.matches || [],
+        version: "parser_table_v266_full",
+        parsed_at: new Date().toISOString()
+      };
+
+      // XY table detection
       try{
-        await ensureLoggedIn();
-
-        const year = new Date().getFullYear();
-        const ts = Date.now();
-        const filename = ts + "_" + sanitizeFilename(it.file.name);
-        const path = year + "/" + filename;
-
-        const up = await sb.storage.from("factures").upload(path, it.file, {
-          upsert:false, cacheControl:"3600", contentType:"application/pdf"
-        });
-        if(up.error) throw up.error;
-
-        const ins = await sb.from("factures").insert({
-          fichier_url: path,
-          fichier_nom: it.file.name,
-          statut:"pending",
-          format_facture:"auto"
-        }).select("id,created_at").single();
-        if(ins.error) throw ins.error;
-
-        it.factureId = ins.data.id;
-        it.createdAt = ins.data.created_at || new Date().toISOString();
-        it.status="extracting";
-        renderList();
-
-        const signed = await sb.storage.from("factures").createSignedUrl(path, 600);
-        if(signed.error) throw signed.error;
-
-        const res = await fetch(signed.data.signedUrl);
-        if(!res.ok) throw new Error("Fetch PDF impossible");
-        const arrayBuffer = await res.arrayBuffer();
-
-        const fullText = await extractPdfTextFromArrayBuffer(arrayBuffer);
-        if(!fullText || fullText.length<30) throw new Error("Texte extrait trop court");
-
-        const parsed = parseFieldsRobust(fullText);
-
-        const data = {
-          lines: [],
-          table: [ fallbackTableFromOCRText(fullText) ],
-          fields: parsed.fields || {},
-          matches: parsed.matches || [],
-          version: "parser_table_v266",
-          parsed_at: new Date().toISOString()
-        };
-
-        const payload = {
-          texte_ocr: fullText,
-          donnees_brutes: data,
-          statut:"extracted",
-          numero_facture: data.fields.numero_facture || null,
-          date_facture: data.fields.date_facture || null,
-          client_nom: data.fields.client_nom || null,
-          total_ht: safeNum(data.fields.total_ht),
-          total_tva: safeNum(data.fields.total_tva),
-          total_ttc: safeNum(data.fields.total_ttc)
-        };
-
-        const upd = await sb.from("factures").update(payload).eq("id", it.factureId);
-        if(upd.error) throw upd.error;
-
-        // Replace entry to saved
-        state.files = state.files.map(f => {
-          if(f === it){
-            return {
-              kind:"saved",
-              fileName: it.file.name,
-              size: it.file.size,
-              status:"extracted",
-              factureId: it.factureId,
-              createdAt: it.createdAt,
-              error: null
-            };
-          }
-          return f;
-        });
-
-        renderList();
-        setMsg("ok", "✅ Extraction OK. Clique 👁 Voir.");
-        setTimeout(()=>setMsg("", ""), 1200);
-
+        const pages = await extractPdfItemsXY(arrayBuffer);
+        const tablePages = [];
+        for(let i=0;i<pages.length;i++){
+          const pg = pages[i];
+          const tpg = extractTableFromXY(pg.items);
+          tablePages.push({
+            page: pg.page,
+            cols: tpg.cols,
+            debug: tpg.debug,
+            services: tpg.services,
+            debours: tpg.debours
+          });
+        }
+        data.table = tablePages;
       }catch(e){
-        it.status="error";
-        it.error = e && e.message ? e.message : String(e);
-        renderList();
-        setMsg("err", "Erreur: " + it.error);
+        console.warn("XY detector error:", e);
+        data.table = [];
       }
-    }
 
+      const emptyTable = !data.table.length || data.table.every(function(p){ return !p || !p.services || p.services.length===0; });
+      if(emptyTable){
+        data.table = [ fallbackTableFromOCRText(fullText) ];
+      }
+
+      const payload = {
+        texte_ocr: fullText,
+        donnees_brutes: data,
+        statut:"extracted",
+        numero_facture: data.fields.numero_facture || null,
+        date_facture: data.fields.date_facture || null,
+        client_nom: data.fields.client_nom || null,
+        total_ht: safeNum(data.fields.total_ht),
+        total_tva: safeNum(data.fields.total_tva),
+        total_ttc: safeNum(data.fields.total_ttc)
+      };
+
+      const upd = await sb.from("factures").update(payload).eq("id", item.factureId);
+      if(upd.error) throw upd.error;
+
+      state.files = state.files.map(function(f){
+        if(f === item){
+          return {
+            kind:"saved",
+            fileName: item.file.name,
+            size: item.file.size,
+            status:"extracted",
+            factureId: item.factureId,
+            createdAt: item.createdAt,
+            error: null
+          };
+        }
+        return f;
+      });
+
+      renderList();
+      setMsg("ok", "✅ Extraction OK. Clique 👁 Voir pour éditer et contrôler.");
+      setTimeout(function(){ setMsg("", ""); }, 1500);
+
+    }catch(e){
+      item.status="error";
+      item.error = (e && e.message) ? e.message : String(e);
+      renderList();
+      setMsg("err", "Erreur: " + item.error);
+    }
+  }
+
+  startBtn.addEventListener("click", async function(){
+    setMsg("warn", "Extraction en cours…");
+    const items = state.files.filter(function(x){ return x.kind==="local" && x.status==="ready"; });
+    for(let i=0;i<items.length;i++){
+      await uploadAndProcessOne(items[i]);
+    }
     setMsg("ok", "✅ Terminé.");
-    setTimeout(()=>setMsg("", ""), 1200);
+    setTimeout(function(){ setMsg("", ""); }, 1200);
   });
 
+  // ----------------------------
   // Init
+  // ----------------------------
   (async function init(){
     try{
       pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+
       sb = await waitForSupabaseClient();
 
       restoreList();
       renderList();
 
       await refreshSession();
-      sb.auth.onAuthStateChange(async () => await refreshSession());
+      sb.auth.onAuthStateChange(async function(){ await refreshSession(); });
       startKeepAlive();
 
-      if(!sessionOk) setMsg("warn", "Connecte-toi pour uploader.");
-      else setMsg("", "");
+      if(!sessionOk){
+        setMsg("warn", "Connecte-toi pour uploader.");
+      } else {
+        setMsg("", "");
+      }
     }catch(e){
       console.error(e);
-      setMsg("err", "Erreur init: " + (e && e.message ? e.message : e));
+      setMsg("err", "Supabase non initialisé / erreur init: " + ((e && e.message) ? e.message : e));
     }
   })();
+
 })();
 </script>
 </body>
