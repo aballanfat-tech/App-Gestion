@@ -129,10 +129,16 @@
   </div>
 
   <div class="card">
+    <!-- Header avec compteur + bouton filtres -->
     <div class="row" style="align-items:center; justify-content:space-between;">
-      <div style="font-weight:900;">📄 Factures</div>
-      <div class="muted" id="count">0</div>
-    </div>
+    <div style="font-weight:900;">📄 Factures</div>
+    <div class="row" style="gap:12px; align-items:center;">
+    <button class="btn small" id="btnToggleFilters" title="Afficher/masquer filtres">
+      🔽 Filtres
+    </button>
+    <div class="muted" id="count">0</div>
+  </div>
+</div>
 
     <div style="overflow:auto; margin-top:10px;">
       <table>
@@ -1641,3 +1647,4 @@
 </script>
 </body>
 </html>
+
