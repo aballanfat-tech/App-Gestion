@@ -138,25 +138,41 @@
     </button>
     <div class="muted" id="count">0</div>
   </div>
-</div>
-
-    <div style="overflow:auto; margin-top:10px;">
-      <table>
-        <thead>
-          <tr>
-            <th>Fichier</th>
-            <th>Taille</th>
-            <th>Statut</th>
-            <th>ID</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody id="tbody">
-          <tr><td colspan="5" class="muted">Aucun fichier</td></tr>
-        </tbody>
-      </table>
-    </div>
   </div>
+
+ <div style="overflow:auto; margin-top:10px;">
+  <table style="table-layout:fixed; width:100%;">
+    <colgroup>
+      <col style="width:40%">  <!-- Fichier -->
+      <col style="width:10%">  <!-- Taille -->
+      <col style="width:12%">  <!-- Statut -->
+      <col style="width:12%">  <!-- Date -->
+      <col style="width:13%">  <!-- ID -->
+      <col style="width:13%">  <!-- Actions -->
+    </colgroup>
+    <thead>
+      <tr>
+        <th data-sort="fileName" style="cursor:pointer; user-select:none;">
+          Fichier <span id="sortFileName"></span>
+        </th>
+        <th data-sort="size" style="cursor:pointer; user-select:none;">
+          Taille <span id="sortSize"></span>
+        </th>
+        <th data-sort="status" style="cursor:pointer; user-select:none;">
+          Statut <span id="sortStatus"></span>
+        </th>
+        <th data-sort="created_at" style="cursor:pointer; user-select:none;">
+          Date <span id="sortCreatedAt"></span>
+        </th>
+        <th>ID</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody id="tbody">
+      <tr><td colspan="6" class="muted">Aucune facture</td></tr>
+    </tbody>
+  </table>
+</div>
 </main>
 
 <!-- MODAL -->
@@ -1647,4 +1663,5 @@
 </script>
 </body>
 </html>
+
 
